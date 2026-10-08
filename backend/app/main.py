@@ -2,7 +2,8 @@ import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+from fastapi import FastAPI, Request, status
+from fastapi.responses import JSONResponse
 
 from app import __version__
 from app.api.auth import router as auth_router
@@ -13,6 +14,8 @@ from app.core.database import create_client, ping
 from app.core.logging import configure_logging
 from app.repositories.users import UserRepository
 from app.services.auth import AuthService
+
+INTERNAL_ERROR_MESSAGE = "Erro interno."
 
 logger = logging.getLogger(__name__)
 
@@ -39,9 +42,24 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         logger.info("server.stopped", extra={"details": {"version": __version__}})
 
 
+async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:
+    route = request.scope.get("route")
+    details = {
+        "method": request.method,
+        "route": getattr(route, "path", request.url.path),
+        "exception": type(exc).__name__,
+    }
+    logger.error("error.internal", extra={"details": details}, exc_info=exc)
+    return JSONResponse(
+        {"detail": INTERNAL_ERROR_MESSAGE},
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+    )
+
+
 def create_app(settings: Settings | None = None) -> FastAPI:
     app = FastAPI(title="Jogo da Velha Multiplayer", version=__version__, lifespan=lifespan)
     app.state.settings = settings or Settings()
+    app.add_exception_handler(Exception, handle_unexpected_error)
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(me_router)
