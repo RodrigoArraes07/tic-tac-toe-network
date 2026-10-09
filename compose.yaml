@@ -32,7 +32,11 @@ services:
       - "8000:8000"
     volumes:
       - ./backend/app:/app/app
-    command: uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --reload
+    # Cabeçalhos de proxy só são aceitos do IP fixo do nginx; quem acessa a
+    # porta 8000 direto não consegue falsificar X-Forwarded-For.
+    command: >
+      uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --reload
+      --proxy-headers --forwarded-allow-ips 172.28.0.10
     healthcheck:
       test:
         - CMD
@@ -43,6 +47,37 @@ services:
       timeout: 5s
       retries: 5
       start_period: 10s
+
+  nginx:
+    profiles: ["https"]
+    build:
+      context: .
+      dockerfile: infra/nginx/Dockerfile
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/certs:/etc/nginx/certs:ro
+    networks:
+      default:
+        # Mesmo IP do --forwarded-allow-ips do backend.
+        ipv4_address: 172.28.0.10
+    healthcheck:
+      # -k: a CA do mkcert não é confiável dentro do container.
+      test: ["CMD", "curl", "-fsk", "https://localhost/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
 
 volumes:
   mongo-data:
