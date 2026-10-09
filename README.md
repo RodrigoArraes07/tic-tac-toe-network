@@ -108,6 +108,63 @@ npm run format:check
 npm run build
 ```
 
+## HTTPS local
+
+O Nginx termina o TLS na porta 443, serve o build do front-end e encaminha
+`/api` e `/ws` ao back-end. Ele só sobe com o profile `https`; o desenvolvimento
+do dia a dia continua com `npm run dev`.
+
+1. Instale o mkcert.
+
+   Windows (cmd):
+
+   ```
+   winget install FiloSottile.mkcert
+   ```
+
+   Linux:
+
+   ```
+   sudo apt install mkcert libnss3-tools
+   ```
+
+2. Instale a autoridade certificadora local.
+
+   ```
+   mkcert -install
+   ```
+
+3. Gere o certificado em `infra/certs/`, na raiz do repositório.
+
+   Windows (cmd):
+
+   ```
+   mkdir infra\certs
+   mkcert -cert-file infra\certs\localhost.pem -key-file infra\certs\localhost-key.pem localhost 127.0.0.1 ::1
+   ```
+
+   Linux/macOS:
+
+   ```
+   mkdir -p infra/certs
+   mkcert -cert-file infra/certs/localhost.pem -key-file infra/certs/localhost-key.pem localhost 127.0.0.1 ::1
+   ```
+
+   Para testar a partir de outra máquina da rede, acrescente o IP do servidor
+   ao fim do comando.
+
+4. Suba tudo com o Nginx.
+
+   ```
+   docker compose --profile https up -d --build
+   ```
+
+Acesse https://localhost. Para parar, incluindo o Nginx:
+
+```
+docker compose --profile https down
+```
+
 ## Comandos do Docker
 
 | Comando | Quando usar |
