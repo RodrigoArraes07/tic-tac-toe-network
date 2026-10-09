@@ -9,15 +9,21 @@ depende da reconexão.
 
 | Método | Rota | Auth | Corpo / resposta |
 | --- | --- | --- | --- |
-| POST | `/api/auth/register` | — | `{username, password}` → `201`. Erros: `409` username já existe, `422` dados inválidos. |
-| POST | `/api/auth/login` | — | `{username, password}` → `200 {access_token, token_type, expires_in, user}`. Erro: `401` com mensagem genérica; `429` excesso de tentativas. |
-| GET | `/api/me` | Bearer | Dados do usuário logado e suas estatísticas. |
+| POST | `/api/auth/register` | — | `{username, password}` → `201 {id, username}`. Erros: `409` username já existe, `422` dados inválidos. |
+| POST | `/api/auth/login` | — | `{username, password}` → `200 {access_token, token_type: "bearer", expires_in, user: {id, username}}`. Erro: `401` com mensagem genérica; `429` excesso de tentativas. |
+| GET | `/api/me` | Bearer | `200 {id, username, stats: {wins, losses, draws, points}}` — dados do usuário logado e suas estatísticas. |
 | GET | `/api/ranking?limit=20` | Bearer | Lista ordenada `[{position, username, points, wins, draws, losses}]`. |
 | GET | `/api/health` | — | `{status, db}` — usado pelo Docker e nos testes. |
 | GET | `/api/admin/stats` | Bearer (admin) | OPC Online, partidas ativas, erros recentes (painel). |
 
 Regras de validação: username com 3–20 caracteres `[a-zA-Z0-9_]`, comparado em
 minúsculas; senha com 8–72 caracteres.
+
+Erros REST: corpo no formato `{"detail": "..."}`, com a mensagem em português.
+Erro inesperado no servidor responde `500` com `{"detail": "Erro interno."}`.
+Quando o corpo da requisição vem malformado (campo ausente ou de tipo errado), o
+`422` é gerado pelo FastAPI e `detail` é uma lista de erros de validação, não um
+texto.
 
 ## 7.2 Conexão WebSocket
 
