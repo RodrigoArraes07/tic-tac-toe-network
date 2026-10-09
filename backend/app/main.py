@@ -9,11 +9,13 @@ from app import __version__
 from app.api.auth import router as auth_router
 from app.api.health import router as health_router
 from app.api.me import router as me_router
+from app.api.ranking import router as ranking_router
 from app.core.config import Settings
 from app.core.database import create_client, ping
 from app.core.logging import configure_logging
 from app.repositories.users import UserRepository
 from app.services.auth import AuthService
+from app.services.ranking import RankingService
 
 INTERNAL_ERROR_MESSAGE = "Erro interno."
 
@@ -30,6 +32,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.auth_service = AuthService(
         users, settings.jwt_secret.get_secret_value(), settings.jwt_expires_minutes
     )
+    app.state.ranking_service = RankingService(users)
     db_available = await ping(client)
     if db_available:
         await users.ensure_indexes()
@@ -63,4 +66,5 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(health_router)
     app.include_router(auth_router)
     app.include_router(me_router)
+    app.include_router(ranking_router)
     return app
