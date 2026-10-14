@@ -18,9 +18,9 @@ from app.core.logging import configure_logging
 from app.repositories.matches import MatchRepository
 from app.repositories.users import UserRepository
 from app.services.auth import AuthService
+from app.services.game_handlers import setup_game_handlers
 from app.services.matchmaking_handlers import setup_matchmaking_handlers
 from app.services.ranking import RankingService
-from app.services.game_handlers import setup_game_handlers
 from app.ws.connection_manager import connection_manager
 from app.ws.gateway import router as ws_router
 

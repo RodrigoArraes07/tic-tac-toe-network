@@ -1,5 +1,6 @@
 from app.core.event_bus import Event, event_bus
-from app.services.game_engine import game_engine_service 
+from app.services.game_engine import game_engine_service
+
 
 async def handle_make_move(event: Event) -> None:
     if not event.user_id:

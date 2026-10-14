@@ -4,9 +4,9 @@ import uuid
 from dataclasses import dataclass
 
 from app.domain.enums import Symbol
+from app.services.game_engine import game_engine_service
 from app.ws.connection_manager import connection_manager
 from app.ws.protocol import MatchFoundPayload, OpponentInfo, WSMessageEnvelope
-from app.services.game_engine import game_engine_service
 
 logger = logging.getLogger(__name__)
 
