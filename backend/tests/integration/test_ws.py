@@ -1,10 +1,11 @@
 import pytest
 from fastapi.testclient import TestClient
-from app.main import create_app
-from app.core.config import Settings
-from app.services.auth import AuthService
+
 from app.api.auth import get_auth_service
+from app.core.config import Settings
+from app.main import create_app
 from app.repositories.users import User
+from app.services.auth import AuthService
 
 
 class MockUserRepository:

@@ -1,12 +1,14 @@
 import asyncio
+import contextlib
 import json
+
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
-from app.core.event_bus import event_bus, Event
+from app.core.event_bus import Event, event_bus
 from app.services.auth import AuthService
 from app.ws.connection_manager import connection_manager
-from app.ws.protocol import WSMessageEnvelope, AuthPayload
+from app.ws.protocol import AuthPayload, WSMessageEnvelope
 
 router = APIRouter()
 
@@ -71,11 +73,9 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             )
         )
 
-    except (asyncio.TimeoutError, ValidationError, json.JSONDecodeError, Exception):
-        try:
+    except (TimeoutError, ValidationError, json.JSONDecodeError, Exception):
+        with contextlib.suppress(Exception):
             await websocket.close(code=4401, reason="Não autenticado")
-        except Exception:
-            pass
         return
 
     # --- PASSO 2: Loop Principal de Mensagens ---

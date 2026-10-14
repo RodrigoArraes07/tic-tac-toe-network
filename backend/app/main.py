@@ -12,12 +12,12 @@ from app.api.me import router as me_router
 from app.api.ranking import router as ranking_router
 from app.core.config import Settings
 from app.core.database import create_client, ping
-from app.core.event_bus import event_bus  
+from app.core.event_bus import event_bus
 from app.core.logging import configure_logging
 from app.repositories.users import UserRepository
 from app.services.auth import AuthService
 from app.services.ranking import RankingService
-from app.ws.gateway import router as ws_router  
+from app.ws.gateway import router as ws_router
 
 INTERNAL_ERROR_MESSAGE = "Erro interno."
 

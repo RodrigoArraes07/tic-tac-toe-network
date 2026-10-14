@@ -1,16 +1,18 @@
 import asyncio
-from typing import Callable, Coroutine, Dict, List, Any
+import contextlib
+from collections.abc import Callable, Coroutine
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 
 @dataclass
 class Event:
     type: str
-    data: Dict[str, Any]
+    data: dict[str, Any]
     user_id: str | None = None
     match_id: str | None = None
-    ts: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
+    ts: str = field(default_factory=lambda: datetime.now(UTC).isoformat())
 
 
 EventHandler = Callable[[Event], Coroutine[Any, Any, None]]
@@ -18,7 +20,7 @@ EventHandler = Callable[[Event], Coroutine[Any, Any, None]]
 
 class EventBus:
     def __init__(self) -> None:
-        self._subscribers: Dict[str, List[EventHandler]] = {}
+        self._subscribers: dict[str, list[EventHandler]] = {}
 
     def subscribe(self, event_type: str, handler: EventHandler) -> None:
         """Inscreve um handler para um tipo específico de evento (ou '*' para todos)."""
@@ -28,13 +30,13 @@ class EventBus:
 
     async def publish(self, event: Event) -> None:
         """Publica um evento para todos os inscritos sem bloquear em caso de erro individual."""
-        handlers = list(self._subscribers.get(event.type, [])) + list(self._subscribers.get("*", []))
-        
+        handlers = list(self._subscribers.get(event.type, [])) + list(
+            self._subscribers.get("*", [])
+        )
+
         for handler in handlers:
-            try:
+            with contextlib.suppress(Exception):
                 asyncio.create_task(handler(event))
-            except Exception:
-                pass
 
 
 # Instância global
