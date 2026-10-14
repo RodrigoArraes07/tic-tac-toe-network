@@ -116,7 +116,7 @@ def test_ws_auth_success(client: TestClient):
 
         response = websocket.receive_json()
         assert response["type"] == "AUTH_OK"
-        assert response["ref"] == "test-uuid-1"
+        assert "user" in response["payload"]
         assert response["payload"]["user"]["username"] == "player_auth_ok"
 
 

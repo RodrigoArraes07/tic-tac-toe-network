@@ -1,4 +1,5 @@
 import asyncio
+import contextlib
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
@@ -178,11 +179,12 @@ class GameEngineService:
     async def _finish_match(
         self, match: ActiveMatch, winner_id: str | None, reason: EndReason
     ) -> None:
-        """Finaliza a partida e notifica ambos com os resultados (WIN/LOSS/DRAW)."""
+        """Finaliza a partida, notifica os jogadores e salva no banco de dados."""
         match.is_finished = True
         if match.timeout_task:
             match.timeout_task.cancel()
 
+        # 1. Notifica os jogadores via WebSocket
         for uid, _player in match.players.items():
             if reason == EndReason.DRAW:
                 result_type = MatchResultType.DRAW
@@ -203,7 +205,32 @@ class GameEngineService:
                 uid, envelope.model_dump_json()
             )
 
-        # Limpa da memória
+        # 2. Persistência de Histórico e Ranking no Banco
+        p1 = next(p for p in match.players.values() if p.symbol == Symbol.X)
+        p2 = next(p for p in match.players.values() if p.symbol == Symbol.CIRCLE)
+
+        ranking_service = getattr(connection_manager, "ranking_service", None)
+        match_repo = getattr(connection_manager, "match_repo", None)
+
+        if ranking_service:
+            with contextlib.suppress(Exception):
+                if reason == EndReason.DRAW:
+                    await ranking_service.record_draw(p1.user_id, p2.user_id)
+                elif winner_id:
+                    loser_id = p2.user_id if winner_id == p1.user_id else p1.user_id
+                    await ranking_service.record_win(winner_id, loser_id)
+
+        if match_repo:
+            with contextlib.suppress(Exception):
+                await match_repo.create_match_record(
+                    match_id=match.match_id,
+                    player_x_id=p1.user_id,
+                    player_o_id=p2.user_id,
+                    winner_id=winner_id,
+                    reason=reason.value,
+                )
+
+        # 3. Limpa estado em memória
         async with self._lock:
             for uid in match.players:
                 self._player_match_map.pop(uid, None)

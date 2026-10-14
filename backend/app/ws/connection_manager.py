@@ -9,7 +9,6 @@ class ConnectionManager:
         self.active_connections: dict[str, WebSocket] = {}
 
     async def connect(self, user_id: str, websocket: WebSocket) -> None:
-        await websocket.accept()
         if user_id in self.active_connections:
             old_ws = self.active_connections[user_id]
             with contextlib.suppress(Exception):

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from app.domain.enums import Symbol
 from app.ws.connection_manager import connection_manager
 from app.ws.protocol import MatchFoundPayload, OpponentInfo, WSMessageEnvelope
+from app.services.game_engine import game_engine_service
 
 logger = logging.getLogger(__name__)
 
@@ -54,6 +55,14 @@ class MatchmakingService:
 
     async def _create_match(self, p1: QueuePlayer, p2: QueuePlayer) -> None:
         match_id = str(uuid.uuid4())
+
+        await game_engine_service.create_match(
+            match_id=match_id,
+            p1_id=p1.user_id,
+            p1_username=p1.username,
+            p2_id=p2.user_id,
+            p2_username=p2.username,
+        )
 
         msg_p1 = WSMessageEnvelope(
             type="MATCH_FOUND",
