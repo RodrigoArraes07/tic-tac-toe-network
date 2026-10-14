@@ -12,10 +12,12 @@ from app.api.me import router as me_router
 from app.api.ranking import router as ranking_router
 from app.core.config import Settings
 from app.core.database import create_client, ping
+from app.core.event_bus import event_bus  
 from app.core.logging import configure_logging
 from app.repositories.users import UserRepository
 from app.services.auth import AuthService
 from app.services.ranking import RankingService
+from app.ws.gateway import router as ws_router  
 
 INTERNAL_ERROR_MESSAGE = "Erro interno."
 
@@ -28,11 +30,16 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     configure_logging(settings.log_level)
     client = create_client(settings.mongo_uri)
     app.state.mongo_client = client
+    
+    # Registra o event_bus no estado global da aplicação
+    app.state.event_bus = event_bus
+
     users = UserRepository(client[settings.mongo_db])
     app.state.auth_service = AuthService(
         users, settings.jwt_secret.get_secret_value(), settings.jwt_expires_minutes
     )
     app.state.ranking_service = RankingService(users)
+    
     db_available = await ping(client)
     if db_available:
         await users.ensure_indexes()
@@ -67,4 +74,6 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.include_router(auth_router)
     app.include_router(me_router)
     app.include_router(ranking_router)
+    app.include_router(ws_router)
+    
     return app
