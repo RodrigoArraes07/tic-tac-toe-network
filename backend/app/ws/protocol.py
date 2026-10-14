@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field
 
-from app.domain.enums import Symbol
+from app.domain.enums import EndReason, MatchResultType, Symbol
 
 
 class WSMessageEnvelope(BaseModel):
@@ -18,11 +18,31 @@ class WSMessageEnvelope(BaseModel):
 class AuthPayload(BaseModel):
     token: str
 
+
 class OpponentInfo(BaseModel):
     id: str
     username: str
+
 
 class MatchFoundPayload(BaseModel):
     match_id: str
     symbol: Symbol
     opponent: OpponentInfo
+
+
+class MakeMovePayload(BaseModel):
+    cell: int = Field(ge=0, le=8)  
+
+
+class GameStatePayload(BaseModel):
+    match_id: str
+    board: list[Symbol | None] 
+    current_turn: Symbol
+    turn_expires_at: str
+
+
+class GameOverPayload(BaseModel):
+    match_id: str
+    winner_id: str | None
+    reason: EndReason
+    result_type: MatchResultType
