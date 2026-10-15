@@ -10,3 +10,4 @@ class Settings(BaseSettings):
     log_level: str = "INFO"
     jwt_secret: SecretStr = Field(min_length=JWT_SECRET_MIN_LENGTH)
     jwt_expires_minutes: int
+    invite_timeout_s: int = Field(gt=0)

@@ -138,6 +138,13 @@ class GameEngineService:
             )
             return match
 
+    def active_match_of(self, user_id: str) -> str | None:
+        return self._player_match_map.get(user_id)
+
+    async def sync(self, user_id: str, match_id: str) -> MatchSnapshot:
+        async with self._lock:
+            return _snapshot(self._require_player_match(user_id, match_id))
+
     def get_state(self, match_id: str) -> MatchSnapshot | None:
         match = self._matches.get(match_id)
         return _snapshot(match) if match else None

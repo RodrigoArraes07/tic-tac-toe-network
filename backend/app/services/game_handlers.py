@@ -9,7 +9,7 @@ from app.repositories.matches import MatchRepository
 from app.services.game_engine import GameEngineService, GameError, MatchOutcome, MatchSnapshot
 from app.services.ranking import RankingService
 from app.ws.connection_manager import ConnectionManager
-from app.ws.protocol import ForfeitPayload, MovePayload, WSMessageEnvelope
+from app.ws.protocol import ForfeitPayload, MatchSyncPayload, MovePayload, WSMessageEnvelope
 
 FREE_STATUS = "FREE"
 ERROR_MESSAGES = {
@@ -148,6 +148,7 @@ class GameHandlers:
     def subscribe(self, bus: EventBus) -> None:
         bus.subscribe("cmd.move", self.handle_move)
         bus.subscribe("cmd.forfeit", self.handle_forfeit)
+        bus.subscribe("cmd.match_sync", self.handle_match_sync)
         bus.subscribe("user.disconnected", self.handle_user_disconnected)
 
     async def handle_move(self, event: Event) -> None:
@@ -191,6 +192,22 @@ class GameHandlers:
             await self._send_error(event.user_id, err.code, ref)
             return
         await self._finisher.finish(outcome, ref)
+
+    async def handle_match_sync(self, event: Event) -> None:
+        if not event.user_id:
+            return
+        envelope = event.data.get("envelope", {})
+        ref = envelope.get("id")
+        try:
+            payload = MatchSyncPayload.model_validate(envelope.get("payload", {}))
+            state = await self._engine.sync(event.user_id, payload.match_id)
+        except ValidationError:
+            await self._send_error(event.user_id, "INVALID_MESSAGE", ref)
+            return
+        except GameError as err:
+            await self._send_error(event.user_id, err.code, ref)
+            return
+        await _send(self._connections, event.user_id, _match_state(state, None, ref))
 
     async def handle_user_disconnected(self, event: Event) -> None:
         if not event.user_id:

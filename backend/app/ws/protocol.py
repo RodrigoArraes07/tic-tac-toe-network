@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from pydantic import BaseModel, Field, StrictInt, StrictStr
+from pydantic import BaseModel, Field, StrictBool, StrictInt, StrictStr
 
 from app.domain.enums import EndReason, MatchResultType, Symbol
 
@@ -37,6 +37,23 @@ class MovePayload(BaseModel):
 
 
 class ForfeitPayload(BaseModel):
+    match_id: StrictStr
+
+
+class MatchSyncPayload(BaseModel):
+    match_id: StrictStr
+
+
+class InviteSendPayload(BaseModel):
+    to_username: StrictStr
+
+
+class InviteRespondPayload(BaseModel):
+    match_id: StrictStr
+    accept: StrictBool
+
+
+class InviteCancelPayload(BaseModel):
     match_id: StrictStr
 
 

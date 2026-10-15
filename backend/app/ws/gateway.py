@@ -8,6 +8,7 @@ from pydantic import ValidationError
 
 from app.core.event_bus import Event, EventBus
 from app.services.auth import AuthService
+from app.services.game_engine import GameEngineService
 from app.ws.connection_manager import connection_manager
 from app.ws.protocol import AuthPayload, WSMessageEnvelope
 
@@ -26,6 +27,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
     auth_service: AuthService = websocket.app.state.auth_service
     event_bus: EventBus = websocket.app.state.event_bus
+    engine: GameEngineService = websocket.app.state.game_engine
 
     # Autenticação Inicial
     try:
@@ -62,7 +64,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             ref=envelope.id,
             payload={
                 "user": {"id": authenticated_user_id, "username": authenticated_username},
-                "active_match_id": None,
+                "active_match_id": engine.active_match_of(authenticated_user_id),
             },
         )
         await websocket.send_text(auth_ok_msg.model_dump_json())
@@ -123,8 +125,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         pass
     finally:
-        if authenticated_user_id:
-            await connection_manager.disconnect(authenticated_user_id)
+        went_offline = authenticated_user_id is not None and await connection_manager.disconnect(
+            authenticated_user_id, websocket
+        )
+        if went_offline:
             await event_bus.publish(
                 Event(
                     type="user.disconnected",

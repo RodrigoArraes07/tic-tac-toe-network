@@ -1,8 +1,12 @@
+import contextlib
 import logging
 
 from fastapi import WebSocket
 
 from app.ws.protocol import WSMessageEnvelope
+
+SESSION_REPLACED_CODE = 4001
+SESSION_REPLACED_REASON = "Sessão aberta em outra conexão"
 
 logger = logging.getLogger(__name__)
 
@@ -17,22 +21,31 @@ class ConnectionManager:
         self.presence_status: dict[str, str] = {}
 
     async def connect(self, user_id: str, username: str, websocket: WebSocket) -> None:
-        """Registra nova conexão e notifica a rede sobre a presença do usuário."""
+        """Registra a conexão; uma conexão anterior do mesmo usuário é fechada com 4001."""
+        previous = self.active_connections.get(user_id)
+        # A nova é registrada antes de fechar a antiga, para o disconnect da antiga
+        # reconhecer que ela já não é a conexão do usuário.
         self.active_connections[user_id] = websocket
         self.user_names[user_id] = username
-        self.presence_status[user_id] = "FREE"
+        if previous is not None:
+            with contextlib.suppress(Exception):
+                await previous.close(code=SESSION_REPLACED_CODE, reason=SESSION_REPLACED_REASON)
+            return
 
-        # Notifica os OUTROS usuários sobre a chegada deste usuário
+        self.presence_status[user_id] = "FREE"
         await self.broadcast_presence_update(username, "FREE", exclude_user_id=user_id)
 
-    async def disconnect(self, user_id: str) -> None:
-        """Remove a conexão e avisa que o usuário ficou OFFLINE."""
+    async def disconnect(self, user_id: str, websocket: WebSocket) -> bool:
+        """Remove a conexão e avisa OFFLINE, só se ela ainda for a registrada do usuário."""
+        if self.active_connections.get(user_id) is not websocket:
+            return False
         username = self.user_names.pop(user_id, None)
         self.active_connections.pop(user_id, None)
         self.presence_status.pop(user_id, None)
 
         if username:
             await self.broadcast_presence_update(username, "OFFLINE")
+        return True
 
     def update_status(self, user_id: str, status: str) -> None:
         """Atualiza o status (ex: FREE para IN_MATCH) e transmite a alteração."""

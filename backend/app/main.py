@@ -21,7 +21,7 @@ from app.services import game_engine
 from app.services.auth import AuthService
 from app.services.game_engine import GameEngineService
 from app.services.game_handlers import GameHandlers, MatchFinisher
-from app.services.invite_handlers import setup_invite_handlers
+from app.services.invite_handlers import InviteHandlers
 from app.services.invite_service import InviteService
 from app.services.matchmaking import MatchmakingService
 from app.services.matchmaking_handlers import setup_matchmaking_handlers
@@ -66,7 +66,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     )
     app.state.game_engine = engine
     GameHandlers(engine, finisher, connection_manager).subscribe(event_bus)
-    setup_invite_handlers(event_bus, InviteService(engine))
+    invite_service = InviteService(engine, connection_manager, settings.invite_timeout_s)
+    InviteHandlers(invite_service).subscribe(event_bus)
     setup_matchmaking_handlers(event_bus, MatchmakingService(engine))
 
     db_available = await ping(client)
@@ -78,6 +79,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         yield
     finally:
         engine.close()
+        invite_service.close()
         await client.close()
         logger.info("server.stopped", extra={"details": {"version": __version__}})
 
