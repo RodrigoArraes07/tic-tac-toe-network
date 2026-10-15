@@ -15,7 +15,7 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
-MAX_MESSAGE_SIZE_BYTES = 4096  # Regra de tamanho máximo: 4 KB
+MAX_MESSAGE_SIZE_BYTES = 4096
 
 
 @router.websocket("/ws")
@@ -26,7 +26,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
     auth_service: AuthService = websocket.app.state.auth_service
 
-    # --- PASSO 1: Autenticação Inicial (AUTH obrigatório em até 5 segundos) ---
+    # Autenticação Inicial
     try:
         raw_data = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
 
@@ -55,10 +55,10 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         authenticated_user_id = str(user_id_val)
         authenticated_username = str(user.username)
 
-        # Registra a conexão ativa (sem chamar accept novamente)
-        await connection_manager.connect(authenticated_user_id, websocket)
+        # Registra a conexão ativa
+        await connection_manager.connect(authenticated_user_id, authenticated_username, websocket)
 
-        # Responde AUTH_OK
+        # Responde AUTH_OK primeiro
         auth_ok_msg = WSMessageEnvelope(
             type="AUTH_OK",
             ref=envelope.id,
@@ -68,6 +68,13 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             },
         )
         await websocket.send_text(auth_ok_msg.model_dump_json())
+
+        # Envia PRESENCE_SNAPSHOT logo em seguida
+        snapshot_msg = WSMessageEnvelope(
+            type="PRESENCE_SNAPSHOT",
+            payload={"users": connection_manager.get_presence_snapshot()},
+        )
+        await websocket.send_text(snapshot_msg.model_dump_json())
 
         # Publica evento de conexão no barramento
         await event_bus.publish(
@@ -84,7 +91,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             await websocket.close(code=4401, reason="Não autenticado")
         return
 
-    # --- PASSO 2: Loop Principal de Mensagens ---
+    # Loop Principal de Mensagens
     try:
         while True:
             raw_data = await websocket.receive_text()
@@ -121,7 +128,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         pass
     finally:
         if authenticated_user_id:
-            connection_manager.disconnect(authenticated_user_id)
+            await connection_manager.disconnect(authenticated_user_id)
             await event_bus.publish(
                 Event(
                     type="user.disconnected",

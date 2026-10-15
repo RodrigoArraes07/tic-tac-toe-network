@@ -19,6 +19,7 @@ from app.repositories.matches import MatchRepository
 from app.repositories.users import UserRepository
 from app.services.auth import AuthService
 from app.services.game_handlers import setup_game_handlers
+from app.services.invite_handlers import setup_invite_handlers
 from app.services.matchmaking_handlers import setup_matchmaking_handlers
 from app.services.ranking import RankingService
 from app.ws.connection_manager import connection_manager
@@ -37,6 +38,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     # Inicializa os ouvintes do EventBus para o Matchmaking
     setup_matchmaking_handlers()
     setup_game_handlers()
+    setup_invite_handlers()
 
     client = create_client(settings.mongo_uri)
     app.state.mongo_client = client
