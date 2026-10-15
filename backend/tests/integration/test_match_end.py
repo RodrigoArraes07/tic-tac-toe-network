@@ -196,11 +196,11 @@ def test_turn_timeout_ends_the_match_and_notifies_both_players(
         receive_presence_free(ws_o, x.username, o.username)
 
     assert (ended_x["result"], ended_o["result"]) == ("LOSS", "WIN")
-    assert ended_x["reason"] == ended_o["reason"] == "FORFEIT"
+    assert ended_x["reason"] == ended_o["reason"] == "TIMEOUT"
     assert _stats(users_collection, x) == LOSS_STATS
     assert _stats(users_collection, o) == WIN_STATS
     stored = _stored_match(matches_collection, match_id)
-    assert (stored["winner_id"], stored["reason"]) == (o.user_id, "FORFEIT")
+    assert (stored["winner_id"], stored["reason"]) == (o.user_id, "TIMEOUT")
 
 
 def test_move_with_old_seq_is_rejected_as_stale_state(
@@ -227,3 +227,21 @@ def test_move_with_old_seq_is_rejected_as_stale_state(
     assert resent["payload"]["board"] == [None, None, None, None, "X", None, None, None, None]
     assert next_state_o["payload"]["seq"] == 2
     assert next_state_o["payload"]["board"] == [None, None, None, None, "X", None, None, None, "O"]
+
+
+def test_match_started_names_the_opponent_by_username(
+    client: TestClient, players: tuple[Player, Player], created_matches: list[str]
+) -> None:
+    x, o = players
+    with client.websocket_connect("/ws") as ws_x, client.websocket_connect("/ws") as ws_o:
+        authenticate(ws_x, x)
+        authenticate(ws_o, o)
+        send(ws_x, "INVITE_SEND", {"to_username": o.username})
+        match_id = receive(ws_o, "INVITE_RECEIVED")["payload"]["match_id"]
+        created_matches.append(match_id)
+        send(ws_o, "INVITE_RESPOND", {"match_id": match_id, "accept": True})
+        started_x = receive(ws_x, "MATCH_STARTED", match_id=match_id)["payload"]
+        started_o = receive(ws_o, "MATCH_STARTED", match_id=match_id)["payload"]
+
+    assert (started_x["you_are"], started_x["opponent"]) == ("X", o.username)
+    assert (started_o["you_are"], started_o["opponent"]) == ("O", x.username)

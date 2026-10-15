@@ -55,6 +55,13 @@ class MatchSnapshot:
 
 
 @dataclass(frozen=True)
+class PlayerView:
+    state: MatchSnapshot
+    you_are: Symbol
+    opponent: str
+
+
+@dataclass(frozen=True)
 class MatchOutcome:
     match_id: str
     player_x: PlayerSession
@@ -141,9 +148,15 @@ class GameEngineService:
     def active_match_of(self, user_id: str) -> str | None:
         return self._player_match_map.get(user_id)
 
-    async def sync(self, user_id: str, match_id: str) -> MatchSnapshot:
+    async def sync(self, user_id: str, match_id: str) -> PlayerView:
+        """Estado atual do ponto de vista de quem pediu (símbolo e adversário)."""
         async with self._lock:
-            return _snapshot(self._require_player_match(user_id, match_id))
+            match = self._require_player_match(user_id, match_id)
+            return PlayerView(
+                state=_snapshot(match),
+                you_are=match.players[user_id].symbol,
+                opponent=match.opponent_of(user_id).username,
+            )
 
     def get_state(self, match_id: str) -> MatchSnapshot | None:
         match = self._matches.get(match_id)
@@ -252,7 +265,7 @@ class GameEngineService:
                 extra={"details": {"match_id": match_id, "loser": loser.user_id}},
             )
             winner = match.opponent_of(loser.user_id)
-            outcome = self._finish(match, winner_id=winner.user_id, reason=EndReason.FORFEIT)
+            outcome = self._finish(match, winner_id=winner.user_id, reason=EndReason.TIMEOUT)
         await self._on_match_end(outcome)
 
     def _finish(

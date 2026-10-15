@@ -20,6 +20,7 @@ class EndReason(StrEnum):
     DRAW = "DRAW"
     FORFEIT = "FORFEIT"
     DISCONNECT = "DISCONNECT"
+    TIMEOUT = "TIMEOUT"
 
 
 class MatchResultType(StrEnum):

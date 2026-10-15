@@ -39,3 +39,16 @@ async def test_failing_handler_is_logged_and_does_not_stop_the_others(
         "handler": "failing_handler",
     }
     assert errors[0].exc_info is not None
+
+
+async def test_has_subscribers_ignores_wildcard_handlers() -> None:
+    bus = EventBus()
+
+    async def any_event(event: Event) -> None:
+        pass
+
+    bus.subscribe("*", any_event)
+    bus.subscribe(EVENT_TYPE, any_event)
+
+    assert bus.has_subscribers("cmd.sem_handler") is False
+    assert bus.has_subscribers(EVENT_TYPE) is True

@@ -36,7 +36,10 @@ async def _send(connections: ConnectionManager, user_id: str, envelope: WSMessag
 
 
 def _match_state(
-    state: MatchSnapshot, last_move: dict[str, Any] | None, ref: str | None
+    state: MatchSnapshot,
+    last_move: dict[str, Any] | None,
+    ref: str | None,
+    extra: dict[str, Any] | None = None,
 ) -> WSMessageEnvelope:
     return WSMessageEnvelope(
         type="MATCH_STATE",
@@ -47,6 +50,7 @@ def _match_state(
             "turn": state.turn.value,
             "seq": state.seq,
             "last_move": last_move,
+            **(extra or {}),
         },
     )
 
@@ -200,14 +204,17 @@ class GameHandlers:
         ref = envelope.get("id")
         try:
             payload = MatchSyncPayload.model_validate(envelope.get("payload", {}))
-            state = await self._engine.sync(event.user_id, payload.match_id)
+            view = await self._engine.sync(event.user_id, payload.match_id)
         except ValidationError:
             await self._send_error(event.user_id, "INVALID_MESSAGE", ref)
             return
         except GameError as err:
             await self._send_error(event.user_id, err.code, ref)
             return
-        await _send(self._connections, event.user_id, _match_state(state, None, ref))
+        # Só a resposta a MATCH_SYNC leva símbolo e adversário: é o que o cliente
+        # precisa para retomar a partida depois de recarregar a página.
+        extra = {"you_are": view.you_are.value, "opponent": view.opponent}
+        await _send(self._connections, event.user_id, _match_state(view.state, None, ref, extra))
 
     async def handle_user_disconnected(self, event: Event) -> None:
         if not event.user_id:

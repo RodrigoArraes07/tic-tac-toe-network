@@ -273,6 +273,8 @@ def test_new_connection_resumes_the_match_in_progress(
             old_connection = closed_code(ws_a1)
             sync_id = send(ws_a2, "MATCH_SYNC", {"match_id": match_id})
             synced = receive(ws_a2, "MATCH_STATE")
+            send(ws_b, "MATCH_SYNC", {"match_id": match_id})
+            synced_b = receive(ws_b, "MATCH_STATE")["payload"]
             send(ws_a2, "MOVE", {"match_id": match_id, "cell": 4, "seq": 0})
             state_a = receive(ws_a2, "MATCH_STATE", seq=1)["payload"]
             state_b = receive(ws_b, "MATCH_STATE", seq=1)["payload"]
@@ -283,7 +285,10 @@ def test_new_connection_resumes_the_match_in_progress(
     assert synced["payload"]["seq"] == 0
     assert synced["payload"]["turn"] == "X"
     assert synced["payload"]["board"] == [None] * 9
+    assert (synced["payload"]["you_are"], synced["payload"]["opponent"]) == ("X", b.username)
+    assert (synced_b["you_are"], synced_b["opponent"]) == ("O", a.username)
     assert state_a["board"][4] == state_b["board"][4] == "X"
+    assert "you_are" not in state_a and "opponent" not in state_a
 
 
 def test_match_sync_outside_the_match_is_refused(

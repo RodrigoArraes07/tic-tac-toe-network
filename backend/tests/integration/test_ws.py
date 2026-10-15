@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from app.main import create_app
 from app.ws import gateway
-from tests.integration.ws_helpers import closed_code, create_player, send
+from tests.integration.ws_helpers import authenticate, closed_code, create_player, receive, send
 
 SHORT_AUTH_TIMEOUT_SECONDS = 0.2
 UNAUTHENTICATED_CODE = 4401
@@ -62,3 +62,25 @@ def test_valid_auth_gets_auth_ok_then_presence_snapshot(
     assert auth_ok["payload"]["active_match_id"] is None
     assert snapshot["type"] == "PRESENCE_SNAPSHOT"
     assert {"username": player.username, "status": "FREE"} in snapshot["payload"]["users"]
+
+
+def test_commands_after_auth_get_errors_with_ref(
+    client: TestClient, new_username: UsernameFactory
+) -> None:
+    player = create_player(client, new_username())
+
+    with client.websocket_connect("/ws") as websocket:
+        authenticate(websocket, player)
+        queue_id = send(websocket, "JOIN_QUEUE", {})
+        unknown = receive(websocket, "ERROR")
+        auth_id = send(websocket, "AUTH", {"token": player.token})
+        repeated_auth = receive(websocket, "ERROR")
+        websocket.send_json({"id": "sem-type", "payload": {}})
+        without_type = receive(websocket, "ERROR")
+        websocket.send_text("{json quebrado")
+        broken = receive(websocket, "ERROR")
+
+    assert (unknown["payload"]["code"], unknown["ref"]) == ("UNKNOWN_TYPE", queue_id)
+    assert (repeated_auth["payload"]["code"], repeated_auth["ref"]) == ("INVALID_STATE", auth_id)
+    assert (without_type["payload"]["code"], without_type["ref"]) == ("INVALID_MESSAGE", "sem-type")
+    assert (broken["payload"]["code"], broken["ref"]) == ("INVALID_MESSAGE", None)

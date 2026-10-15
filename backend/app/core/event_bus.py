@@ -32,6 +32,10 @@ class EventBus:
             self._subscribers[event_type] = []
         self._subscribers[event_type].append(handler)
 
+    def has_subscribers(self, event_type: str) -> bool:
+        """Só conta handlers do tipo exato; os curinga '*' não tratam um comando."""
+        return bool(self._subscribers.get(event_type))
+
     async def publish(self, event: Event) -> None:
         """Publica um evento para todos os inscritos sem bloquear em caso de erro individual."""
         handlers = list(self._subscribers.get(event.type, [])) + list(
