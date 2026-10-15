@@ -54,7 +54,7 @@ def test_draw_scenario():
     # X O X
     # X O O
     # O X .
-    board = ["X", "CIRCLE", "X", "X", "CIRCLE", "CIRCLE", "CIRCLE", "X", None]
+    board = ["X", "O", "X", "X", "O", "O", "O", "X", None]
     new_board, _, result = apply_move(board, Symbol.X, 8, Symbol.X)
 
     assert result is not None

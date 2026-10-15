@@ -4,7 +4,6 @@ from collections.abc import Callable, Iterator
 import pytest
 from fastapi.testclient import TestClient
 from starlette.testclient import WebSocketTestSession
-from starlette.websockets import WebSocketDisconnect
 
 from app.core.config import Settings
 from app.main import create_app
@@ -12,6 +11,7 @@ from tests.integration.ws_helpers import (
     Message,
     Player,
     authenticate,
+    closed_code,
     create_player,
     receive,
     send,
@@ -57,13 +57,6 @@ def _invite(ws_from: WebSocketTestSession, ws_to: WebSocketTestSession, to: Play
 
 def _error_code(ws: WebSocketTestSession) -> str:
     return receive(ws, "ERROR")["payload"]["code"]
-
-
-def _closed_code(ws: WebSocketTestSession) -> int:
-    with pytest.raises(WebSocketDisconnect) as closed:
-        while True:
-            ws.receive_json()
-    return closed.value.code
 
 
 def test_respond_from_a_third_user_is_refused_and_keeps_the_invite(
@@ -204,6 +197,29 @@ def test_rejecting_or_cancelling_stops_the_expiration_timer(
     assert [(m["type"], m["payload"]["code"]) for m in probes] == [("ERROR", "INVALID_STATE")] * 4
 
 
+def test_accepting_stops_the_expiration_timer(
+    short_invite_client: TestClient, new_username: UsernameFactory, created_matches: list[str]
+) -> None:
+    a, b = _players(short_invite_client, new_username, 2)
+    with (
+        short_invite_client.websocket_connect("/ws") as ws_a,
+        short_invite_client.websocket_connect("/ws") as ws_b,
+    ):
+        authenticate(ws_a, a)
+        authenticate(ws_b, b)
+        match_id = start_match(ws_a, ws_b, b, created_matches)
+
+        time.sleep(WAIT_PAST_TIMEOUT_S)
+        send(ws_a, "INVITE_CANCEL", {"match_id": match_id})
+        probe_a = _next_non_presence(ws_a)
+        send(ws_b, "INVITE_RESPOND", {"match_id": match_id, "accept": True})
+        probe_b = _next_non_presence(ws_b)
+
+    assert [(m["type"], m["payload"]["code"]) for m in (probe_a, probe_b)] == [
+        ("ERROR", "INVALID_STATE")
+    ] * 2
+
+
 def test_invite_payloads_are_validated(client: TestClient, new_username: UsernameFactory) -> None:
     (a,) = _players(client, new_username, 1)
     with client.websocket_connect("/ws") as ws_a:
@@ -231,7 +247,7 @@ def test_new_connection_replaces_the_old_one_and_keeps_presence(
             authenticate(ws_a1, a)
             with client.websocket_connect("/ws") as ws_a2:
                 authenticate(ws_a2, a)
-                old_connection = _closed_code(ws_a1)
+                old_connection = closed_code(ws_a1)
                 with client.websocket_connect("/ws") as ws_c:
                     send(ws_c, "AUTH", {"token": c.token})
                     snapshot = receive(ws_c, "PRESENCE_SNAPSHOT")["payload"]["users"]
@@ -254,7 +270,7 @@ def test_new_connection_resumes_the_match_in_progress(
         with client.websocket_connect("/ws") as ws_a2:
             send(ws_a2, "AUTH", {"token": a.token})
             auth_ok = receive(ws_a2, "AUTH_OK")["payload"]
-            old_connection = _closed_code(ws_a1)
+            old_connection = closed_code(ws_a1)
             sync_id = send(ws_a2, "MATCH_SYNC", {"match_id": match_id})
             synced = receive(ws_a2, "MATCH_STATE")
             send(ws_a2, "MOVE", {"match_id": match_id, "cell": 4, "seq": 0})

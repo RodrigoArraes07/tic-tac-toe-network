@@ -2,8 +2,10 @@ from dataclasses import dataclass
 from typing import Any
 from uuid import uuid4
 
+import pytest
 from fastapi.testclient import TestClient
 from starlette.testclient import WebSocketTestSession
+from starlette.websockets import WebSocketDisconnect
 
 PASSWORD = "senha-correta-123"
 
@@ -76,3 +78,10 @@ def play(
         for ws in (ws_x, ws_o):
             state = receive(ws, "MATCH_STATE", seq=seq + 1)
             assert state["payload"]["last_move"]["cell"] == cell
+
+
+def closed_code(ws: WebSocketTestSession) -> int:
+    with pytest.raises(WebSocketDisconnect) as closed:
+        while True:
+            ws.receive_json()
+    return closed.value.code

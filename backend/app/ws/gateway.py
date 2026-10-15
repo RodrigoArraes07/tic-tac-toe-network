@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 router = APIRouter()
 
 MAX_MESSAGE_SIZE_BYTES = 4096
+AUTH_TIMEOUT_SECONDS = 5.0
 
 
 @router.websocket("/ws")
@@ -31,7 +32,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
     # Autenticação Inicial
     try:
-        raw_data = await asyncio.wait_for(websocket.receive_text(), timeout=5.0)
+        raw_data = await asyncio.wait_for(websocket.receive_text(), timeout=AUTH_TIMEOUT_SECONDS)
 
         if len(raw_data.encode("utf-8")) > MAX_MESSAGE_SIZE_BYTES:
             await websocket.close(code=1009, reason="Mensagem grande demais")

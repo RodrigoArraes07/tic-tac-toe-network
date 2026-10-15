@@ -1,3 +1,4 @@
+import asyncio
 import contextlib
 import logging
 
@@ -19,6 +20,7 @@ class ConnectionManager:
         self.user_names: dict[str, str] = {}
         # user_id -> status ("FREE" | "IN_MATCH")
         self.presence_status: dict[str, str] = {}
+        self._broadcast_tasks: set[asyncio.Task[None]] = set()
 
     async def connect(self, user_id: str, username: str, websocket: WebSocket) -> None:
         """Registra a conexão; uma conexão anterior do mesmo usuário é fechada com 4001."""
@@ -53,9 +55,9 @@ class ConnectionManager:
             self.presence_status[user_id] = status
             username = self.user_names.get(user_id)
             if username:
-                import asyncio
-
-                asyncio.create_task(self.broadcast_presence_update(username, status))
+                task = asyncio.create_task(self.broadcast_presence_update(username, status))
+                self._broadcast_tasks.add(task)
+                task.add_done_callback(self._broadcast_tasks.discard)
 
     def get_presence_snapshot(self) -> list[dict[str, str]]:
         """Retorna lista de todos os usuários online e seus status."""
@@ -68,8 +70,6 @@ class ConnectionManager:
         self, username: str, status: str, exclude_user_id: str | None = None
     ) -> None:
         """Envia evento PRESENCE_UPDATE para as conexões ativas."""
-        import contextlib
-
         update_msg = WSMessageEnvelope(
             type="PRESENCE_UPDATE",
             payload={"username": username, "status": status},

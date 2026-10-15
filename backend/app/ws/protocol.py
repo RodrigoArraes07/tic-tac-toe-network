@@ -4,7 +4,7 @@ from typing import Any
 
 from pydantic import BaseModel, Field, StrictBool, StrictInt, StrictStr
 
-from app.domain.enums import EndReason, MatchResultType, Symbol
+from app.domain.enums import Symbol
 
 
 class WSMessageEnvelope(BaseModel):
@@ -55,21 +55,3 @@ class InviteRespondPayload(BaseModel):
 
 class InviteCancelPayload(BaseModel):
     match_id: StrictStr
-
-
-class MakeMovePayload(BaseModel):
-    cell: int = Field(ge=0, le=8)
-
-
-class GameStatePayload(BaseModel):
-    match_id: str
-    board: list[Symbol | None]
-    current_turn: Symbol
-    turn_expires_at: str
-
-
-class GameOverPayload(BaseModel):
-    match_id: str
-    winner_id: str | None
-    reason: EndReason
-    result_type: MatchResultType
