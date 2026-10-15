@@ -43,7 +43,6 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
 
         auth_payload = AuthPayload(**envelope.payload)
 
-        # Autentica o usuário via JWT
         user = await auth_service.get_user_from_token(auth_payload.token)
 
         if not user:
@@ -55,10 +54,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         authenticated_user_id = str(user_id_val)
         authenticated_username = str(user.username)
 
-        # Registra a conexão ativa
         await connection_manager.connect(authenticated_user_id, authenticated_username, websocket)
 
-        # Responde AUTH_OK primeiro
         auth_ok_msg = WSMessageEnvelope(
             type="AUTH_OK",
             ref=envelope.id,
@@ -69,14 +66,12 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         )
         await websocket.send_text(auth_ok_msg.model_dump_json())
 
-        # Envia PRESENCE_SNAPSHOT logo em seguida
         snapshot_msg = WSMessageEnvelope(
             type="PRESENCE_SNAPSHOT",
             payload={"users": connection_manager.get_presence_snapshot()},
         )
         await websocket.send_text(snapshot_msg.model_dump_json())
 
-        # Publica evento de conexão no barramento
         await event_bus.publish(
             Event(
                 type="user.connected",
@@ -91,7 +86,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             await websocket.close(code=4401, reason="Não autenticado")
         return
 
-    # Loop Principal de Mensagens
+    # Loop Principal
     try:
         while True:
             raw_data = await websocket.receive_text()

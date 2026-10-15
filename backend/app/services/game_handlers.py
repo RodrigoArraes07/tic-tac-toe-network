@@ -16,10 +16,8 @@ async def handle_make_move(event: Event) -> None:
     if cell is None:
         return
 
-    # Executa a regra na engine desacoplada
     result = await game_engine_service.make_move(event.user_id, cell)
 
-    # Se a jogada falhou, envia o envelope de ERROR com o ref da mensagem original
     if "error" in result:
         error_env = WSMessageEnvelope(
             type="ERROR",
@@ -32,11 +30,9 @@ async def handle_make_move(event: Event) -> None:
         await connection_manager.send_personal_message(event.user_id, error_env.model_dump_json())
         return
 
-    # Se deu certo, notifica ambos os jogadores
     match = result["match"]
 
     if result.get("game_over"):
-        # Fim da partida: envia MATCH_ENDED
         for uid in match.players:
             if result["reason"].value == "DRAW":
                 res_type = "DRAW"
@@ -57,7 +53,6 @@ async def handle_make_move(event: Event) -> None:
             )
             await connection_manager.send_personal_message(uid, ended_env.model_dump_json())
     else:
-        # Partida continua: envia MATCH_STATE
         state_env = WSMessageEnvelope(
             type="MATCH_STATE",
             ref=msg_id,
@@ -73,9 +68,32 @@ async def handle_make_move(event: Event) -> None:
             await connection_manager.send_personal_message(uid, state_env.model_dump_json())
 
 
+async def handle_game_user_disconnected(event: Event) -> None:
+    """Caso o jogador caia no meio da partida, notifica o fim com DISCONNECT."""
+    if not event.user_id:
+        return
+
+    res = await game_engine_service.handle_player_disconnect(event.user_id)
+    if res:
+        match = res["match"]
+        for uid in match.players:
+            res_type = "WIN" if uid == res["winner_id"] else "LOSS"
+            ended_env = WSMessageEnvelope(
+                type="MATCH_ENDED",
+                payload={
+                    "match_id": match.match_id,
+                    "result": res_type,
+                    "reason": "DISCONNECT",
+                    "board": match.board,
+                },
+            )
+            await connection_manager.send_personal_message(uid, ended_env.model_dump_json())
+
+
 def setup_game_handlers() -> None:
-    """Registra os ouvintes de jogo no EventBus atendendo aos nomes oficiais."""
+    """Registra os ouvintes de jogo no EventBus."""
     event_bus.subscribe("cmd.move", handle_make_move)
     event_bus.subscribe("cmd.MOVE", handle_make_move)
     event_bus.subscribe("cmd.make_move", handle_make_move)
     event_bus.subscribe("cmd.MAKE_MOVE", handle_make_move)
+    event_bus.subscribe("user.disconnected", handle_game_user_disconnected)
