@@ -2,7 +2,7 @@ import uuid
 from datetime import UTC, datetime
 from typing import Any
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, StrictInt, StrictStr
 
 from app.domain.enums import EndReason, MatchResultType, Symbol
 
@@ -28,6 +28,16 @@ class MatchFoundPayload(BaseModel):
     match_id: str
     symbol: Symbol
     opponent: OpponentInfo
+
+
+class MovePayload(BaseModel):
+    match_id: StrictStr
+    cell: StrictInt
+    seq: StrictInt
+
+
+class ForfeitPayload(BaseModel):
+    match_id: StrictStr
 
 
 class MakeMovePayload(BaseModel):

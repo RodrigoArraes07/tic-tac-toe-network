@@ -37,7 +37,3 @@ class EventBus:
         for handler in handlers:
             with contextlib.suppress(Exception):
                 asyncio.create_task(handler(event))
-
-
-# Instância global
-event_bus = EventBus()

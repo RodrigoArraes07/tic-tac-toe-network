@@ -6,7 +6,7 @@ import logging
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
 
-from app.core.event_bus import Event, event_bus
+from app.core.event_bus import Event, EventBus
 from app.services.auth import AuthService
 from app.ws.connection_manager import connection_manager
 from app.ws.protocol import AuthPayload, WSMessageEnvelope
@@ -25,6 +25,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     authenticated_username: str | None = None
 
     auth_service: AuthService = websocket.app.state.auth_service
+    event_bus: EventBus = websocket.app.state.event_bus
 
     # Autenticação Inicial
     try:

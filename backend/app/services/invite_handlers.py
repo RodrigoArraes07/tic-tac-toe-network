@@ -1,8 +1,10 @@
-from app.core.event_bus import Event, event_bus
-from app.services.invite_service import invite_service
+from functools import partial
+
+from app.core.event_bus import Event, EventBus
+from app.services.invite_service import InviteService
 
 
-async def handle_invite_send(event: Event) -> None:
+async def handle_invite_send(invite_service: InviteService, event: Event) -> None:
     if not event.user_id:
         return
     envelope = event.data.get("envelope", {})
@@ -15,7 +17,7 @@ async def handle_invite_send(event: Event) -> None:
         await invite_service.send_invite(event.user_id, username, to_username, msg_id)
 
 
-async def handle_invite_respond(event: Event) -> None:
+async def handle_invite_respond(invite_service: InviteService, event: Event) -> None:
     if not event.user_id:
         return
     envelope = event.data.get("envelope", {})
@@ -28,9 +30,11 @@ async def handle_invite_respond(event: Event) -> None:
         await invite_service.respond_invite(event.user_id, match_id, accept, msg_id)
 
 
-def setup_invite_handlers() -> None:
+def setup_invite_handlers(bus: EventBus, invite_service: InviteService) -> None:
     """Inscreve os handlers no EventBus."""
-    event_bus.subscribe("cmd.invite_send", handle_invite_send)
-    event_bus.subscribe("cmd.INVITE_SEND", handle_invite_send)
-    event_bus.subscribe("cmd.invite_respond", handle_invite_respond)
-    event_bus.subscribe("cmd.INVITE_RESPOND", handle_invite_respond)
+    send = partial(handle_invite_send, invite_service)
+    respond = partial(handle_invite_respond, invite_service)
+    bus.subscribe("cmd.invite_send", send)
+    bus.subscribe("cmd.INVITE_SEND", send)
+    bus.subscribe("cmd.invite_respond", respond)
+    bus.subscribe("cmd.INVITE_RESPOND", respond)

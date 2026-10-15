@@ -2,7 +2,7 @@ import logging
 import uuid
 from dataclasses import dataclass
 
-from app.services.game_engine import game_engine_service
+from app.services.game_engine import GameEngineService
 from app.ws.connection_manager import connection_manager
 from app.ws.protocol import WSMessageEnvelope
 
@@ -19,7 +19,8 @@ class PendingInvite:
 
 
 class InviteService:
-    def __init__(self) -> None:
+    def __init__(self, engine: GameEngineService) -> None:
+        self._engine = engine
         # match_id -> PendingInvite
         self.pending_invites: dict[str, PendingInvite] = {}
 
@@ -102,7 +103,7 @@ class InviteService:
             connection_manager.update_status(invite.to_user_id, "IN_MATCH")
 
             # Cria partida na Engine
-            await game_engine_service.create_match(
+            await self._engine.create_match(
                 match_id=match_id,
                 p1_id=invite.from_user_id,
                 p1_username=invite.from_username,
@@ -147,6 +148,3 @@ class InviteService:
             await connection_manager.send_personal_message(
                 invite.from_user_id, res_msg.model_dump_json()
             )
-
-
-invite_service = InviteService()

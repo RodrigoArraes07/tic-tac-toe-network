@@ -13,13 +13,17 @@ from app.api.me import router as me_router
 from app.api.ranking import router as ranking_router
 from app.core.config import Settings
 from app.core.database import create_client, ping
-from app.core.event_bus import event_bus
+from app.core.event_bus import EventBus
 from app.core.logging import configure_logging
 from app.repositories.matches import MatchRepository
 from app.repositories.users import UserRepository
+from app.services import game_engine
 from app.services.auth import AuthService
-from app.services.game_handlers import setup_game_handlers
+from app.services.game_engine import GameEngineService
+from app.services.game_handlers import GameHandlers, MatchFinisher
 from app.services.invite_handlers import setup_invite_handlers
+from app.services.invite_service import InviteService
+from app.services.matchmaking import MatchmakingService
 from app.services.matchmaking_handlers import setup_matchmaking_handlers
 from app.services.ranking import RankingService
 from app.ws.connection_manager import connection_manager
@@ -35,16 +39,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
     configure_logging(settings.log_level)
 
-    # Inicializa os ouvintes do EventBus para o Matchmaking
-    setup_matchmaking_handlers()
-    setup_game_handlers()
-    setup_invite_handlers()
-
     client = create_client(settings.mongo_uri)
     app.state.mongo_client = client
-
-    # Registra o event_bus no estado global da aplicação
-    app.state.event_bus = event_bus
 
     db = client[settings.mongo_db]
     users = UserRepository(db)
@@ -61,9 +57,17 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.auth_service = auth_service
     app.state.ranking_service = ranking_service
 
-    # Injeta referências no connection_manager para o encerramento da partida
-    connection_manager.match_repo = match_repo
-    connection_manager.ranking_service = ranking_service
+    event_bus = EventBus()
+    app.state.event_bus = event_bus
+    finisher = MatchFinisher(connection_manager, ranking_service, match_repo)
+    engine = GameEngineService(
+        on_match_end=finisher.finish,
+        turn_timeout_seconds=game_engine.TURN_TIMEOUT_SECONDS,
+    )
+    app.state.game_engine = engine
+    GameHandlers(engine, finisher, connection_manager).subscribe(event_bus)
+    setup_invite_handlers(event_bus, InviteService(engine))
+    setup_matchmaking_handlers(event_bus, MatchmakingService(engine))
 
     db_available = await ping(client)
     if db_available:
@@ -73,6 +77,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     try:
         yield
     finally:
+        engine.close()
         await client.close()
         logger.info("server.stopped", extra={"details": {"version": __version__}})
 

@@ -4,7 +4,7 @@ import uuid
 from dataclasses import dataclass
 
 from app.domain.enums import Symbol
-from app.services.game_engine import game_engine_service
+from app.services.game_engine import GameEngineService
 from app.ws.connection_manager import connection_manager
 from app.ws.protocol import MatchFoundPayload, OpponentInfo, WSMessageEnvelope
 
@@ -18,7 +18,8 @@ class QueuePlayer:
 
 
 class MatchmakingService:
-    def __init__(self) -> None:
+    def __init__(self, engine: GameEngineService) -> None:
+        self._engine = engine
         self._queue: list[QueuePlayer] = []
         self._lock = asyncio.Lock()
 
@@ -56,7 +57,7 @@ class MatchmakingService:
     async def _create_match(self, p1: QueuePlayer, p2: QueuePlayer) -> None:
         match_id = str(uuid.uuid4())
 
-        await game_engine_service.create_match(
+        await self._engine.create_match(
             match_id=match_id,
             p1_id=p1.user_id,
             p1_username=p1.username,
@@ -91,6 +92,3 @@ class MatchmakingService:
             "matchmaking.match_created",
             extra={"details": {"match_id": match_id, "p1": p1.user_id, "p2": p2.user_id}},
         )
-
-
-matchmaking_service = MatchmakingService()

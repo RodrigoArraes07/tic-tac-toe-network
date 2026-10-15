@@ -1,72 +1,128 @@
+import asyncio
+from collections.abc import AsyncIterator
+
 import pytest
 
-from app.domain.enums import Symbol
-from app.services.game_engine import GameEngineService
+from app.domain.enums import EndReason, Symbol
+from app.services.game_engine import GameEngineService, GameError, MatchOutcome
+
+SHORT_TURN_SECONDS = 0.05
 
 
-@pytest.mark.asyncio
-async def test_create_match_initializes_players_and_board():
-    service = GameEngineService()
+class OutcomeRecorder:
+    def __init__(self) -> None:
+        self.outcomes: list[MatchOutcome] = []
+
+    async def __call__(self, outcome: MatchOutcome) -> None:
+        self.outcomes.append(outcome)
+
+
+@pytest.fixture
+def recorder() -> OutcomeRecorder:
+    return OutcomeRecorder()
+
+
+@pytest.fixture
+async def service(recorder: OutcomeRecorder) -> AsyncIterator[GameEngineService]:
+    engine = GameEngineService(on_match_end=recorder)
+    yield engine
+    engine.close()
+
+
+async def test_create_match_initializes_players_and_board(service: GameEngineService) -> None:
     match = await service.create_match("m1", "p1", "Player1", "p2", "Player2")
 
     assert match.match_id == "m1"
     assert match.board == [None] * 9
     assert match.current_turn == Symbol.X
+    assert match.seq == 0
     assert match.players["p1"].symbol == Symbol.X
     assert match.players["p2"].symbol == Symbol.CIRCLE
 
-    if match.timeout_task:
-        match.timeout_task.cancel()
 
-
-@pytest.mark.asyncio
-async def test_make_move_alternates_turn_and_updates_board():
-    service = GameEngineService()
+async def test_make_move_alternates_turn_and_increments_seq(service: GameEngineService) -> None:
     await service.create_match("m1", "p1", "Player1", "p2", "Player2")
 
-    # p1 (Symbol.X) joga na posição 0
-    res = await service.make_move("p1", 0)
-    assert res.get("success") is True
-    assert res.get("game_over") is False
+    result = await service.make_move("p1", "m1", 0, 0)
 
-    match = service._matches["m1"]
-    assert match.board[0] == "X"
-    assert match.current_turn == Symbol.CIRCLE
-
-    if match.timeout_task:
-        match.timeout_task.cancel()
+    assert result.outcome is None
+    assert result.state.board[0] == "X"
+    assert result.state.turn == Symbol.CIRCLE
+    assert result.state.seq == 1
+    assert result.last_move == {"symbol": "X", "cell": 0}
 
 
-@pytest.mark.asyncio
-async def test_make_move_out_of_turn_fails():
-    service = GameEngineService()
+async def test_make_move_out_of_turn_fails(service: GameEngineService) -> None:
     await service.create_match("m1", "p1", "Player1", "p2", "Player2")
 
-    # p2 tenta jogar primeiro (sendo que é a vez do p1)
-    res = await service.make_move("p2", 0)
-    assert "error" in res
-    assert res["error"] == "NOT_YOUR_TURN"
+    with pytest.raises(GameError) as error:
+        await service.make_move("p2", "m1", 0, 0)
 
-    match = service._matches["m1"]
-    if match.timeout_task:
-        match.timeout_task.cancel()
+    assert error.value.code == "NOT_YOUR_TURN"
 
 
-@pytest.mark.asyncio
-async def test_winning_game_triggers_game_over():
-    service = GameEngineService()
+async def test_make_move_with_old_seq_is_stale(service: GameEngineService) -> None:
+    await service.create_match("m1", "p1", "Player1", "p2", "Player2")
+    await service.make_move("p1", "m1", 0, 0)
+
+    with pytest.raises(GameError) as error:
+        await service.make_move("p1", "m1", 1, 0)
+
+    assert error.value.code == "STALE_STATE"
+    state = service.get_state("m1")
+    assert state is not None
+    assert state.board == ["X", None, None, None, None, None, None, None, None]
+
+
+async def test_winning_game_returns_the_outcome(service: GameEngineService) -> None:
     await service.create_match("m1", "p1", "Player1", "p2", "Player2")
 
-    # Simulando uma vitória de p1 no topo (0, 1, 2)
-    await service.make_move("p1", 0)  # X
-    await service.make_move("p2", 3)  # O
-    await service.make_move("p1", 1)  # X
-    await service.make_move("p2", 4)  # O
-    res = await service.make_move("p1", 2)  # X Vence!
+    for seq, (player, cell) in enumerate([("p1", 0), ("p2", 3), ("p1", 1), ("p2", 4)]):
+        await service.make_move(player, "m1", cell, seq)
+    result = await service.make_move("p1", "m1", 2, 4)
 
-    assert res.get("success") is True
-    assert res.get("game_over") is True
-    assert res.get("winner_id") == "p1"
+    assert result.outcome is not None
+    assert result.outcome.winner_id == "p1"
+    assert result.outcome.reason == EndReason.LINE
+    assert result.outcome.winning_line == [0, 1, 2]
+    assert result.outcome.moves == 5
+    assert service.get_state("m1") is None
 
-    # A partida deve ter sido removida das partidas ativas após o término
-    assert "m1" not in service._matches
+
+async def test_forfeit_gives_the_win_to_the_opponent(service: GameEngineService) -> None:
+    await service.create_match("m1", "p1", "Player1", "p2", "Player2")
+
+    outcome = await service.forfeit("p2", "m1")
+
+    assert outcome.winner_id == "p1"
+    assert outcome.loser_id == "p2"
+    assert outcome.reason == EndReason.FORFEIT
+
+
+async def test_forfeit_outside_a_match_is_rejected(service: GameEngineService) -> None:
+    await service.create_match("m1", "p1", "Player1", "p2", "Player2")
+
+    codes = []
+    for user_id, match_id in [("p1", "inexistente"), ("p3", "m1")]:
+        with pytest.raises(GameError) as error:
+            await service.forfeit(user_id, match_id)
+        codes.append(error.value.code)
+    await service.forfeit("p1", "m1")
+    with pytest.raises(GameError) as finished:
+        await service.forfeit("p1", "m1")
+
+    assert codes == ["MATCH_NOT_FOUND", "NOT_A_PLAYER"]
+    assert finished.value.code == "INVALID_STATE"
+
+
+async def test_turn_timeout_ends_the_match_through_the_callback(
+    recorder: OutcomeRecorder,
+) -> None:
+    engine = GameEngineService(on_match_end=recorder, turn_timeout_seconds=SHORT_TURN_SECONDS)
+    await engine.create_match("m1", "p1", "Player1", "p2", "Player2")
+
+    await asyncio.sleep(SHORT_TURN_SECONDS * 4)
+
+    assert len(recorder.outcomes) == 1
+    assert recorder.outcomes[0].winner_id == "p2"
+    assert recorder.outcomes[0].reason == EndReason.FORFEIT
