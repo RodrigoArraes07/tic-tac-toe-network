@@ -31,12 +31,12 @@ class MatchFoundPayload(BaseModel):
 
 
 class MakeMovePayload(BaseModel):
-    cell: int = Field(ge=0, le=8)  
+    cell: int = Field(ge=0, le=8)
 
 
 class GameStatePayload(BaseModel):
     match_id: str
-    board: list[Symbol | None] 
+    board: list[Symbol | None]
     current_turn: Symbol
     turn_expires_at: str
 

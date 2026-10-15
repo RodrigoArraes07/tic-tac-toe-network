@@ -1,17 +1,11 @@
 import asyncio
-import contextlib
 import logging
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
-from app.domain.enums import EndReason, MatchResultType, Symbol
+from app.domain.enums import EndReason, Symbol
 from app.domain.tictactoe import apply_move
-from app.ws.connection_manager import connection_manager
-from app.ws.protocol import (
-    GameOverPayload,
-    GameStatePayload,
-    WSMessageEnvelope,
-)
 
 logger = logging.getLogger(__name__)
 
@@ -26,7 +20,7 @@ class PlayerSession:
 @dataclass
 class ActiveMatch:
     match_id: str
-    players: dict[str, PlayerSession]  
+    players: dict[str, PlayerSession]
     board: list[str | None] = field(default_factory=lambda: [None] * 9)
     current_turn: Symbol = Symbol.X
     turn_expires_at: datetime = field(
@@ -39,7 +33,7 @@ class ActiveMatch:
 class GameEngineService:
     def __init__(self) -> None:
         self._matches: dict[str, ActiveMatch] = {}
-        self._player_match_map: dict[str, str] = {} 
+        self._player_match_map: dict[str, str] = {}
         self._lock = asyncio.Lock()
 
     async def create_match(
@@ -64,7 +58,6 @@ class GameEngineService:
             self._player_match_map[p1_id] = match_id
             self._player_match_map[p2_id] = match_id
 
-            # Agenda o timeout da primeira jogada 
             match.timeout_task = asyncio.create_task(
                 self._schedule_turn_timeout(match_id, match.current_turn)
             )
@@ -75,21 +68,20 @@ class GameEngineService:
             )
             return match
 
-    async def make_move(self, user_id: str, cell: int) -> bool:
-        """Aplica a jogada utilizando as regras e validações do apply_move."""
+    async def make_move(self, user_id: str, cell: int) -> dict[str, Any]:
+        """Aplica a jogada e retorna um dicionário com o resultado ou o erro específico."""
         match_id = self._player_match_map.get(user_id)
         if not match_id:
-            return False
+            return {"error": "MATCH_NOT_FOUND", "message": "Partida não encontrada."}
 
         match = self._matches.get(match_id)
         if not match or match.is_finished:
-            return False
+            return {"error": "INVALID_STATE", "message": "Partida encerrada ou inválida."}
 
         player = match.players.get(user_id)
         if not player:
-            return False
+            return {"error": "NOT_A_PLAYER", "message": "Usuário não pertence à partida."}
 
-        # Tenta aplicar a jogada usando a sua função pura
         try:
             new_board, next_turn, result = apply_move(
                 board=match.board,
@@ -98,20 +90,19 @@ class GameEngineService:
                 player_symbol=player.symbol,
             )
         except ValueError as err:
+            reason = str(err).replace(" ", "_")
             logger.warning(
                 "game_engine.invalid_move",
-                extra={"details": {"user_id": user_id, "reason": str(err)}},
+                extra={"details": {"user_id": user_id, "reason": reason}},
             )
-            return False
+            return {"error": reason, "message": "Jogada recusada pelas regras do jogo."}
 
-        # Cancela o timer de timeout do turno anterior
         if match.timeout_task:
             match.timeout_task.cancel()
 
-        # Atualiza o estado da partida
         match.board = new_board
 
-        # Verifica se a partida terminou (Vitória por linha ou Empate)
+        # Checa finalização (vitória ou empate)
         if result and result.get("finished"):
             winner_symbol_val = result.get("winner")
             winner_id = None
@@ -123,23 +114,29 @@ class GameEngineService:
 
             end_reason = EndReason(result["reason"])
             await self._finish_match(match, winner_id=winner_id, reason=end_reason)
-            return True
+            return {
+                "success": True,
+                "game_over": True,
+                "match": match,
+                "winner_id": winner_id,
+                "reason": end_reason,
+            }
 
-        # Partida continua: avança para o próximo turno
+        # Partida continua
         match.current_turn = next_turn
         match.turn_expires_at = datetime.now(UTC) + timedelta(seconds=30)
-
-        # Agenda o timeout para o próximo jogador
         match.timeout_task = asyncio.create_task(
             self._schedule_turn_timeout(match_id, match.current_turn)
         )
 
-        # Transmite o novo estado do tabuleiro via WebSocket
-        await self._broadcast_game_state(match)
-        return True
+        return {
+            "success": True,
+            "game_over": False,
+            "match": match,
+        }
 
     async def _schedule_turn_timeout(self, match_id: str, turn: Symbol) -> None:
-        """Aguarda 30s e declara derrota por W.O. caso o jogador estoure o tempo."""
+        """Timeout de 30s para W.O."""
         try:
             await asyncio.sleep(30)
             match = self._matches.get(match_id)
@@ -150,87 +147,19 @@ class GameEngineService:
                     "game_engine.turn_timeout",
                     extra={"details": {"match_id": match_id, "loser": loser.user_id}},
                 )
-                await self._finish_match(
-                    match, winner_id=winner.user_id, reason=EndReason.FORFEIT
-                )
+                await self._finish_match(match, winner_id=winner.user_id, reason=EndReason.FORFEIT)
         except asyncio.CancelledError:
             pass
-
-    async def _broadcast_game_state(self, match: ActiveMatch) -> None:
-        """Notifica os dois jogadores do novo estado do tabuleiro."""
-        payload = GameStatePayload(
-            match_id=match.match_id,
-            board=match.board,
-            current_turn=match.current_turn,
-            turn_expires_at=match.turn_expires_at.isoformat(),
-        ).model_dump()
-
-        envelope = WSMessageEnvelope(type="GAME_STATE", payload=payload)
-        msg_json = envelope.model_dump_json()
-
-        await asyncio.gather(
-            *(
-                connection_manager.send_personal_message(uid, msg_json)
-                for uid in match.players
-            ),
-            return_exceptions=True,
-        )
 
     async def _finish_match(
         self, match: ActiveMatch, winner_id: str | None, reason: EndReason
     ) -> None:
-        """Finaliza a partida, notifica os jogadores e salva no banco de dados."""
+        """Limpa o estado da partida e persiste histórico/ranking via serviços injetados."""
         match.is_finished = True
         if match.timeout_task:
             match.timeout_task.cancel()
 
-        # 1. Notifica os jogadores via WebSocket
-        for uid, _player in match.players.items():
-            if reason == EndReason.DRAW:
-                result_type = MatchResultType.DRAW
-            elif uid == winner_id:
-                result_type = MatchResultType.WIN
-            else:
-                result_type = MatchResultType.LOSS
-
-            payload = GameOverPayload(
-                match_id=match.match_id,
-                winner_id=winner_id,
-                reason=reason,
-                result_type=result_type,
-            ).model_dump()
-
-            envelope = WSMessageEnvelope(type="GAME_OVER", payload=payload)
-            await connection_manager.send_personal_message(
-                uid, envelope.model_dump_json()
-            )
-
-        # 2. Persistência de Histórico e Ranking no Banco
-        p1 = next(p for p in match.players.values() if p.symbol == Symbol.X)
-        p2 = next(p for p in match.players.values() if p.symbol == Symbol.CIRCLE)
-
-        ranking_service = getattr(connection_manager, "ranking_service", None)
-        match_repo = getattr(connection_manager, "match_repo", None)
-
-        if ranking_service:
-            with contextlib.suppress(Exception):
-                if reason == EndReason.DRAW:
-                    await ranking_service.record_draw(p1.user_id, p2.user_id)
-                elif winner_id:
-                    loser_id = p2.user_id if winner_id == p1.user_id else p1.user_id
-                    await ranking_service.record_win(winner_id, loser_id)
-
-        if match_repo:
-            with contextlib.suppress(Exception):
-                await match_repo.create_match_record(
-                    match_id=match.match_id,
-                    player_x_id=p1.user_id,
-                    player_o_id=p2.user_id,
-                    winner_id=winner_id,
-                    reason=reason.value,
-                )
-
-        # 3. Limpa estado em memória
+        # Limpa o mapeamento em memória
         async with self._lock:
             for uid in match.players:
                 self._player_match_map.pop(uid, None)

@@ -10,6 +10,7 @@ from app.services.auth import AuthService
 
 class MockUserRepository:
     """Mock em memória garantindo persistência por ID e username."""
+
     def __init__(self):
         self.users_by_id = {}
         self.users_by_name = {}
@@ -22,7 +23,7 @@ class MockUserRepository:
             password_hash=password_hash,
             created_at=created_at,
             last_login_at=None,
-            stats={"wins": 0, "losses": 0, "draws": 0}
+            stats={"wins": 0, "losses": 0, "draws": 0},
         )
         self.users_by_id[user_id] = user
         self.users_by_name[username] = user
@@ -43,7 +44,7 @@ class MockUserRepository:
                 password_hash=user.password_hash,
                 created_at=user.created_at,
                 last_login_at=dt,
-                stats=user.stats
+                stats=user.stats,
             )
             self.users_by_id[user_id] = updated_user
             self.users_by_name[user.username] = updated_user
@@ -55,6 +56,7 @@ class MockUserRepository:
 @pytest.fixture
 def client(monkeypatch):
     """Fixture com injeção global do MockUserRepository."""
+
     # Desativa a criação de índices e chamadas ao MongoDB
     async def mock_ensure_indexes(self):
         pass
@@ -66,12 +68,12 @@ def client(monkeypatch):
     mock_auth_service = AuthService(
         users=mock_users,
         jwt_secret=settings.jwt_secret.get_secret_value(),
-        jwt_expires_minutes=settings.jwt_expires_minutes
+        jwt_expires_minutes=settings.jwt_expires_minutes,
     )
 
     # Moca a criação do repositório no lifespan do main.py
     monkeypatch.setattr("app.main.UserRepository", lambda db: mock_users)
-    
+
     app = create_app(settings=settings)
     app.state.auth_service = mock_auth_service
     app.dependency_overrides[get_auth_service] = lambda: mock_auth_service
@@ -85,7 +87,7 @@ def _get_auth_token(client: TestClient, username: str = "player_ws") -> str:
     credentials = {"username": username, "password": "password123"}
     reg_res = client.post("/api/auth/register", json=credentials)
     assert reg_res.status_code == 201
-    
+
     login_res = client.post("/api/auth/login", json=credentials)
     assert login_res.status_code == 200
     return login_res.json()["access_token"]
@@ -106,13 +108,15 @@ def test_ws_auth_success(client: TestClient):
     token = _get_auth_token(client, username="player_auth_ok")
 
     with client.websocket_connect("/ws") as websocket:
-        websocket.send_json({
-            "type": "AUTH",
-            "id": "test-uuid-1",
-            "ref": None,
-            "ts": "2026-10-13T22:00:00Z",
-            "payload": {"token": token}
-        })
+        websocket.send_json(
+            {
+                "type": "AUTH",
+                "id": "test-uuid-1",
+                "ref": None,
+                "ts": "2026-10-13T22:00:00Z",
+                "payload": {"token": token},
+            }
+        )
 
         response = websocket.receive_json()
         assert response["type"] == "AUTH_OK"
@@ -123,11 +127,9 @@ def test_ws_auth_success(client: TestClient):
 def test_ws_auth_invalid_token(client: TestClient):
     """Garante rejeição da conexão para tokens inválidos."""
     with client.websocket_connect("/ws") as websocket:
-        websocket.send_json({
-            "type": "AUTH",
-            "id": "test-uuid-2",
-            "payload": {"token": "token_invalido_qualquer"}
-        })
+        websocket.send_json(
+            {"type": "AUTH", "id": "test-uuid-2", "payload": {"token": "token_invalido_qualquer"}}
+        )
         try:
             response = websocket.receive_json()
             assert response.get("type") == "ERROR"
@@ -138,11 +140,7 @@ def test_ws_auth_invalid_token(client: TestClient):
 def test_ws_invalid_first_message_not_auth(client: TestClient):
     """Garante rejeição se a primeira mensagem enviada não for AUTH."""
     with client.websocket_connect("/ws") as websocket:
-        websocket.send_json({
-            "type": "MOVE",
-            "id": "test-uuid-3",
-            "payload": {"cell": 4}
-        })
+        websocket.send_json({"type": "MOVE", "id": "test-uuid-3", "payload": {"cell": 4}})
         try:
             data = websocket.receive_json()
             assert data.get("type") == "ERROR"

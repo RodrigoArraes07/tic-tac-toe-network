@@ -33,11 +33,11 @@ logger = logging.getLogger(__name__)
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     settings: Settings = app.state.settings
     configure_logging(settings.log_level)
-    
+
     # Inicializa os ouvintes do EventBus para o Matchmaking
     setup_matchmaking_handlers()
-    setup_game_handlers() 
-    
+    setup_game_handlers()
+
     client = create_client(settings.mongo_uri)
     app.state.mongo_client = client
 
@@ -67,9 +67,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     if db_available:
         await users.ensure_indexes()
     db_status = "ok" if db_available else "error"
-    logger.info(
-        "server.started", extra={"details": {"version": __version__, "db": db_status}}
-    )
+    logger.info("server.started", extra={"details": {"version": __version__, "db": db_status}})
     try:
         yield
     finally:
@@ -92,9 +90,7 @@ async def handle_unexpected_error(request: Request, exc: Exception) -> JSONRespo
 
 
 def create_app(settings: Settings | None = None) -> FastAPI:
-    app = FastAPI(
-        title="Jogo da Velha Multiplayer", version=__version__, lifespan=lifespan
-    )
+    app = FastAPI(title="Jogo da Velha Multiplayer", version=__version__, lifespan=lifespan)
     app.state.settings = settings or Settings()
     app.add_exception_handler(Exception, handle_unexpected_error)
     app.include_router(health_router)

@@ -38,9 +38,7 @@ class MatchRepository:
 
     async def get_user_matches(self, user_id: str, limit: int = 20) -> list[MatchRecord]:
         cursor = (
-            self._collection.find(
-                {"$or": [{"player_x_id": user_id}, {"player_o_id": user_id}]}
-            )
+            self._collection.find({"$or": [{"player_x_id": user_id}, {"player_o_id": user_id}]})
             .sort("ended_at", -1)
             .limit(limit)
         )

@@ -101,11 +101,13 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     Event(
                         type=f"cmd.{envelope.type.lower()}",
                         user_id=authenticated_user_id,
-                        data={"envelope": envelope.model_dump(),
-                              "username": authenticated_username},
+                        data={
+                            "envelope": envelope.model_dump(),
+                            "username": authenticated_username,
+                        },
                     )
                 )
-            except (json.JSONDecodeError, ValidationError):
+            except json.JSONDecodeError, ValidationError:
                 err_msg = WSMessageEnvelope(
                     type="ERROR",
                     payload={
