@@ -14,6 +14,7 @@ os.environ.setdefault(
 os.environ.setdefault("MONGO_DB", "jogo_da_velha")
 os.environ.setdefault("JWT_SECRET", "segredo-usado-apenas-nos-testes-automatizados")
 os.environ.setdefault("JWT_EXPIRES_MINUTES", "60")
+os.environ.setdefault("INVITE_TIMEOUT_S", "30")
 
 TEST_USERNAME_PREFIX = "t_"
 TEST_USERNAME_SUFFIX_LENGTH = 12
@@ -37,3 +38,17 @@ def new_username(users_collection: Collection[dict[str, Any]]) -> Iterator[Calla
 
     yield _new_username
     users_collection.delete_many({"username": {"$in": created}})
+
+
+@pytest.fixture
+def matches_collection(
+    users_collection: Collection[dict[str, Any]],
+) -> Iterator[Collection[dict[str, Any]]]:
+    yield users_collection.database["matches"]
+
+
+@pytest.fixture
+def created_matches(matches_collection: Collection[dict[str, Any]]) -> Iterator[list[str]]:
+    match_ids: list[str] = []
+    yield match_ids
+    matches_collection.delete_many({"_id": {"$in": match_ids}})
