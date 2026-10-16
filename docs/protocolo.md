@@ -37,7 +37,15 @@ texto.
   detecta conexões mortas. Não é preciso PING de aplicação.
 - Uma sessão por usuário: se o mesmo usuário conectar de novo, a conexão antiga
   é fechada com `4001`.
-- Tamanho máximo de mensagem: 4 KB. Frames maiores fecham a conexão com `1009`.
+- Tamanho máximo de mensagem: 4 KB (configurável por `WS_MAX_MESSAGE_BYTES`).
+  Frames maiores fecham a conexão com `1009`.
+- Limite de mensagens por conexão: 10 por segundo, com rajada de até 20
+  (configuráveis por `WS_RATE_PER_SECOND` e `WS_RATE_BURST`). Acima disso, a
+  mensagem é descartada e o servidor responde `ERROR RATE_LIMITED`. Depois de 3
+  avisos na mesma conexão, o próximo excesso fecha a conexão com `4400`.
+- Origem: se o handshake trouxer o cabeçalho `Origin` e ele não estiver em
+  `ALLOWED_ORIGINS`, a conexão é recusada (HTTP 403). Sem `Origin` (cliente fora
+  do navegador), a conexão é aceita e a autenticação continua sendo o `AUTH`.
 
 ## 7.3 Envelope comum
 
@@ -105,7 +113,7 @@ normal no ranking. A desistência voluntária continua com `reason: FORFEIT`.
 | `INVALID_CELL` | cell fora de 0–8 |
 | `CELL_OCCUPIED` | Casa já marcada |
 | `STALE_STATE` | seq desatualizado |
-| `RATE_LIMITED` | Mensagens demais por segundo |
+| `RATE_LIMITED` | Mensagens demais por segundo; a mensagem é descartada |
 | `INTERNAL` | Erro inesperado (detalhe só no log) |
 
 | Close code (WS) | Significado |
@@ -113,7 +121,7 @@ normal no ranking. A desistência voluntária continua com `reason: FORFEIT`.
 | `1000` | Fechamento normal (logout) |
 | `1009` | Mensagem grande demais |
 | `4001` | Sessão substituída por nova conexão |
-| `4400` | Violação repetida do protocolo |
+| `4400` | Violação repetida do protocolo (ex.: limite de mensagens excedido depois de 3 avisos) |
 | `4401` | Não autenticado / token inválido ou expirado |
 
 > **Regra do cliente:** ao receber 4401, voltar à tela de login; ao receber
