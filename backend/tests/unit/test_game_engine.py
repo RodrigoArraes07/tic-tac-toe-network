@@ -125,4 +125,4 @@ async def test_turn_timeout_ends_the_match_through_the_callback(
 
     assert len(recorder.outcomes) == 1
     assert recorder.outcomes[0].winner_id == "p2"
-    assert recorder.outcomes[0].reason == EndReason.FORFEIT
+    assert recorder.outcomes[0].reason == EndReason.TIMEOUT

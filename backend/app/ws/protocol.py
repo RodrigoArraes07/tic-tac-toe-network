@@ -4,8 +4,6 @@ from typing import Any
 
 from pydantic import BaseModel, Field, StrictBool, StrictInt, StrictStr
 
-from app.domain.enums import Symbol
-
 
 class WSMessageEnvelope(BaseModel):
     type: str
@@ -17,17 +15,6 @@ class WSMessageEnvelope(BaseModel):
 
 class AuthPayload(BaseModel):
     token: str
-
-
-class OpponentInfo(BaseModel):
-    id: str
-    username: str
-
-
-class MatchFoundPayload(BaseModel):
-    match_id: str
-    symbol: Symbol
-    opponent: OpponentInfo
 
 
 class MovePayload(BaseModel):

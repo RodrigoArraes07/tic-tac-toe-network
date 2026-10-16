@@ -13,6 +13,7 @@ depende da reconexão.
 | POST | `/api/auth/login` | — | `{username, password}` → `200 {access_token, token_type: "bearer", expires_in, user: {id, username}}`. Erro: `401` com mensagem genérica; `429` excesso de tentativas. |
 | GET | `/api/me` | Bearer | `200 {id, username, stats: {wins, losses, draws, points}}` — dados do usuário logado e suas estatísticas. |
 | GET | `/api/ranking?limit=20` | Bearer | Lista ordenada `[{position, username, points, wins, draws, losses}]`. |
+| GET | `/api/matches/history` | Bearer | `200 [{id, player_x_id, player_o_id, winner_id\|null, reason, ended_at}]` — as 20 últimas partidas encerradas do usuário, da mais recente para a mais antiga; ids em texto, `reason` como em `MATCH_ENDED`, `ended_at` em ISO-8601. |
 | GET | `/api/health` | — | `{status, db}` — usado pelo Docker e nos testes. |
 | GET | `/api/admin/stats` | Bearer (admin) | OPC Online, partidas ativas, erros recentes (painel). |
 
@@ -77,25 +78,29 @@ frame) com o formato:
 | `INVITE_SENT` | `{match_id, to_username, expires_in}` | Confirma ao convidante. |
 | `INVITE_RECEIVED` | `{match_id, from_username, expires_in}` | Ao convidado. |
 | `INVITE_RESULT` | `{match_id, status: REJECTED\|EXPIRED\|CANCELLED}` | Convite encerrado sem partida. |
-| `MATCH_STARTED` | `{match_id, you_are: X\|O, opponent, board, turn, seq}` | Aos dois jogadores quando o convite é aceito. |
-| `MATCH_STATE` | `{match_id, board[9], turn, seq, last_move\|null}` | Após cada jogada válida (aos dois) e em resposta a MATCH_SYNC. |
-| `MATCH_ENDED` | `{match_id, result: WIN\|LOSS\|DRAW, reason: LINE\|DRAW\|FORFEIT\|DISCONNECT, winning_line\|null, board}` | Fim da partida; `result` é personalizado para cada destinatário. |
+| `MATCH_STARTED` | `{match_id, you_are: X\|O, opponent, board, turn, seq}` | Aos dois jogadores quando o convite é aceito. `opponent` é o username do adversário; `seq` começa em 0. |
+| `MATCH_STATE` | `{match_id, board[9], turn, seq, last_move\|null}`; em resposta a `MATCH_SYNC`, também `you_are: X\|O` e `opponent` (username) | Após cada jogada válida (aos dois, sem `you_are` e `opponent`) e em resposta a MATCH_SYNC (só a quem pediu). |
+| `MATCH_ENDED` | `{match_id, result: WIN\|LOSS\|DRAW, reason: LINE\|DRAW\|FORFEIT\|DISCONNECT\|TIMEOUT, winning_line\|null, board}` | Fim da partida; `result` é personalizado para cada destinatário. |
 | `OPPONENT_DISCONNECTED` | `{match_id, grace_seconds: 30}` | REC Adversário caiu. |
 | `OPPONENT_RECONNECTED` | `{match_id}` | REC Adversário voltou. |
 | `ERROR` | `{code, message}` (`ref` = id do comando) | Qualquer comando recusado. |
+
+Tempo de turno: cada jogador tem 30 s para jogar. Se o tempo acabar, a partida
+termina com `reason: TIMEOUT` e vitória do adversário, que conta como vitória
+normal no ranking. A desistência voluntária continua com `reason: FORFEIT`.
 
 ## 7.5 Códigos de erro e de fechamento
 
 | code (ERROR) | Significado |
 | --- | --- |
-| `INVALID_MESSAGE` | JSON malformado ou fora do schema |
-| `UNKNOWN_TYPE` | type inexistente |
+| `INVALID_MESSAGE` | JSON malformado ou fora do schema; `ref` vem preenchido quando o `id` da mensagem é legível |
+| `UNKNOWN_TYPE` | type sem tratamento no servidor, inclusive tipos fora deste catálogo (ex.: `JOIN_QUEUE`); `ref` = id da mensagem |
 | `USER_OFFLINE` | Convidado não está online |
 | `USER_BUSY` | Convidado ou convidante já em partida/convite |
 | `SELF_INVITE` | Convidou a si mesmo |
 | `MATCH_NOT_FOUND` | match_id inexistente |
 | `NOT_A_PLAYER` | Usuário não pertence à partida |
-| `INVALID_STATE` | Ação incompatível com o status atual |
+| `INVALID_STATE` | Ação incompatível com o status atual, inclusive `AUTH` repetido numa conexão já autenticada |
 | `NOT_YOUR_TURN` | Jogada fora do turno |
 | `INVALID_CELL` | cell fora de 0–8 |
 | `CELL_OCCUPIED` | Casa já marcada |

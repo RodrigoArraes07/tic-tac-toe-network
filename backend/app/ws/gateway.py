@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import json
 import logging
+from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from pydantic import ValidationError
@@ -18,6 +19,25 @@ router = APIRouter()
 
 MAX_MESSAGE_SIZE_BYTES = 4096
 AUTH_TIMEOUT_SECONDS = 5.0
+AUTH_EVENT = "cmd.auth"
+ERROR_MESSAGES = {
+    "INVALID_MESSAGE": "JSON malformado ou fora do schema.",
+    "INVALID_STATE": "Conexão já autenticada.",
+    "UNKNOWN_TYPE": "Tipo de mensagem desconhecido.",
+}
+
+
+def _readable_id(message: Any) -> str | None:
+    if isinstance(message, dict) and isinstance(message.get("id"), str):
+        return message["id"]
+    return None
+
+
+async def _send_error(websocket: WebSocket, code: str, ref: str | None) -> None:
+    envelope = WSMessageEnvelope(
+        type="ERROR", ref=ref, payload={"code": code, "message": ERROR_MESSAGES[code]}
+    )
+    await websocket.send_text(envelope.model_dump_json())
 
 
 @router.websocket("/ws")
@@ -99,29 +119,32 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 await websocket.close(code=1009, reason="Mensagem excedeu 4KB")
                 break
 
+            parsed: Any = None
             try:
-                envelope_dict = json.loads(raw_data)
-                envelope = WSMessageEnvelope(**envelope_dict)
-
-                await event_bus.publish(
-                    Event(
-                        type=f"cmd.{envelope.type.lower()}",
-                        user_id=authenticated_user_id,
-                        data={
-                            "envelope": envelope.model_dump(),
-                            "username": authenticated_username,
-                        },
-                    )
-                )
+                parsed = json.loads(raw_data)
+                envelope = WSMessageEnvelope.model_validate(parsed)
             except json.JSONDecodeError, ValidationError:
-                err_msg = WSMessageEnvelope(
-                    type="ERROR",
-                    payload={
-                        "code": "INVALID_MESSAGE",
-                        "message": "JSON malformado ou fora do schema",
+                await _send_error(websocket, "INVALID_MESSAGE", _readable_id(parsed))
+                continue
+
+            event_type = f"cmd.{envelope.type.lower()}"
+            if event_type == AUTH_EVENT:
+                await _send_error(websocket, "INVALID_STATE", _readable_id(parsed))
+                continue
+            if not event_bus.has_subscribers(event_type):
+                await _send_error(websocket, "UNKNOWN_TYPE", _readable_id(parsed))
+                continue
+
+            await event_bus.publish(
+                Event(
+                    type=event_type,
+                    user_id=authenticated_user_id,
+                    data={
+                        "envelope": envelope.model_dump(),
+                        "username": authenticated_username,
                     },
                 )
-                await websocket.send_text(err_msg.model_dump_json())
+            )
 
     except WebSocketDisconnect:
         pass

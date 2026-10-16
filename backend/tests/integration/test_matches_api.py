@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from datetime import UTC, datetime
 from unittest.mock import AsyncMock, MagicMock
 
@@ -7,6 +8,15 @@ from app.api.auth import get_auth_service
 from app.api.matches import get_match_repository
 from app.main import create_app
 from app.repositories.users import User
+from tests.integration.ws_helpers import (
+    authenticate,
+    create_player,
+    receive,
+    send,
+    start_match,
+)
+
+HISTORY_KEYS = {"id", "player_x_id", "player_o_id", "winner_id", "reason", "ended_at"}
 
 
 def test_get_matches_history_unauthenticated():
@@ -51,3 +61,31 @@ def test_get_matches_history_authenticated():
         assert response.json() == []
 
     app.dependency_overrides.clear()
+
+
+def test_history_lists_the_finished_match_with_id(
+    new_username: Callable[[], str], created_matches: list[str]
+) -> None:
+    with TestClient(create_app()) as client:
+        x = create_player(client, new_username())
+        o = create_player(client, new_username())
+        with client.websocket_connect("/ws") as ws_x, client.websocket_connect("/ws") as ws_o:
+            authenticate(ws_x, x)
+            authenticate(ws_o, o)
+            match_id = start_match(ws_x, ws_o, o, created_matches)
+            send(ws_o, "FORFEIT", {"match_id": match_id})
+            receive(ws_x, "MATCH_ENDED", match_id=match_id)
+            receive(ws_x, "PRESENCE_UPDATE", username=o.username, status="FREE")
+
+        response = client.get(
+            "/api/matches/history", headers={"Authorization": f"Bearer {x.token}"}
+        )
+
+    history = response.json()
+    assert response.status_code == 200
+    assert len(history) == 1
+    assert history[0].keys() == HISTORY_KEYS
+    assert history[0]["id"] == match_id
+    assert (history[0]["player_x_id"], history[0]["player_o_id"]) == (x.user_id, o.user_id)
+    assert (history[0]["winner_id"], history[0]["reason"]) == (x.user_id, "FORFEIT")
+    assert datetime.fromisoformat(history[0]["ended_at"])

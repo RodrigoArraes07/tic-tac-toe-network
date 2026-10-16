@@ -180,15 +180,12 @@ class InviteService:
             p2_id=invite.to_user_id,
             p2_username=invite.to_username,
         )
-        await self._send_match_started(invite, invite.from_user_id, "X", invite.to_user_id)
-        await self._send_match_started(invite, invite.to_user_id, "O", invite.from_user_id)
+        await self._send_match_started(invite, invite.from_user_id, "X", invite.to_username)
+        await self._send_match_started(invite, invite.to_user_id, "O", invite.from_username)
 
     async def _send_match_started(
-        self, invite: PendingInvite, user_id: str, symbol: str, opponent_id: str
+        self, invite: PendingInvite, user_id: str, symbol: str, opponent_username: str
     ) -> None:
-        opponent_username = (
-            invite.to_username if opponent_id == invite.to_user_id else invite.from_username
-        )
         await self._send(
             user_id,
             WSMessageEnvelope(
@@ -196,7 +193,7 @@ class InviteService:
                 payload={
                     "match_id": invite.match_id,
                     "you_are": symbol,
-                    "opponent": {"id": opponent_id, "username": opponent_username},
+                    "opponent": opponent_username,
                     "board": [None] * 9,
                     "turn": "X",
                     "seq": 0,

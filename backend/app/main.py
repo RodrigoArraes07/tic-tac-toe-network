@@ -23,8 +23,6 @@ from app.services.game_engine import GameEngineService
 from app.services.game_handlers import GameHandlers, MatchFinisher
 from app.services.invite_handlers import InviteHandlers
 from app.services.invite_service import InviteService
-from app.services.matchmaking import MatchmakingService
-from app.services.matchmaking_handlers import setup_matchmaking_handlers
 from app.services.ranking import RankingService
 from app.ws.connection_manager import connection_manager
 from app.ws.gateway import router as ws_router
@@ -68,7 +66,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     GameHandlers(engine, finisher, connection_manager).subscribe(event_bus)
     invite_service = InviteService(engine, connection_manager, settings.invite_timeout_s)
     InviteHandlers(invite_service).subscribe(event_bus)
-    setup_matchmaking_handlers(event_bus, MatchmakingService(engine))
 
     db_available = await ping(client)
     if db_available:
