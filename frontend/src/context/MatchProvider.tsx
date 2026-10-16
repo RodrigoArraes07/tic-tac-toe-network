@@ -26,10 +26,10 @@ export function MatchProvider({ children }: { children: ReactNode }) {
         if (active) navigate(`/match/${active}`)
       }),
       gameSocket.subscribe('MATCH_STARTED', (m) => {
-        dispatch({ type: 'started', payload: m.payload })
+        dispatch({ type: 'started', payload: m.payload, at: Date.now() })
         navigate(`/match/${m.payload.match_id}`)
       }),
-      gameSocket.subscribe('MATCH_STATE', (m) => dispatch({ type: 'state', payload: m.payload })),
+      gameSocket.subscribe('MATCH_STATE', (m) => dispatch({ type: 'state', payload: m.payload, at: Date.now() })),
       gameSocket.subscribe('MATCH_ENDED', (m) => dispatch({ type: 'ended', payload: m.payload })),
       gameSocket.subscribe('OPPONENT_DISCONNECTED', (m) =>
         dispatch({ type: 'opponent_away', until: Date.now() + m.payload.grace_seconds * 1000 }),

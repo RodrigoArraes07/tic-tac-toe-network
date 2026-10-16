@@ -475,6 +475,18 @@ a {
   margin: 0.2rem 0 0;
 }
 
+.match__timer {
+  margin: 0;
+  text-align: center;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.match__timer--low {
+  color: var(--bad);
+  font-weight: 600;
+}
+
 .match__actions {
   display: flex;
   justify-content: center;

@@ -1,3 +1,5 @@
+import type { EndReason } from './protocol'
+
 // REST (seção 7.1). URLs relativas: o proxy do Vite (dev) e o Nginx (prod)
 // encaminham /api ao backend.
 
@@ -30,6 +32,16 @@ export interface LoginResponse {
   user: User
 }
 
+/** Item de GET /api/matches/history (ids em texto; o histórico usa `id`, não `_id`). */
+export interface MatchHistoryEntry {
+  id: string
+  player_x_id: string
+  player_o_id: string
+  winner_id: string | null
+  reason: EndReason
+  ended_at: string
+}
+
 export class ApiError extends Error {
   status: number
   constructor(status: number, message: string) {
@@ -54,19 +66,20 @@ export function setUnauthorizedHandler(handler: () => void) {
   onUnauthorized = handler
 }
 
+/** O back-end responde {"detail": "..."} em português; no 422 de corpo malformado, `detail` é uma lista. */
 async function readErrorMessage(res: Response): Promise<string> {
-  if (res.status === 409) return 'Esse username já está em uso.'
-  if (res.status === 429) return 'Muitas tentativas. Aguarde um minuto e tente de novo.'
-  if (res.status === 422) return 'Dados inválidos. Confira os campos e tente de novo.'
   try {
     const body: unknown = await res.json()
     if (body && typeof body === 'object' && 'detail' in body) {
       const { detail } = body as { detail: unknown }
-      if (typeof detail === 'string') return detail
+      if (typeof detail === 'string' && detail.trim()) return detail
     }
   } catch {
     // corpo vazio ou não-JSON: cai na mensagem genérica
   }
+  if (res.status === 409) return 'Esse username já está em uso.'
+  if (res.status === 429) return 'Muitas tentativas. Aguarde um minuto e tente de novo.'
+  if (res.status === 422) return 'Dados inválidos. Confira os campos e tente de novo.'
   if (res.status === 401) return 'Usuário ou senha inválidos.'
   return 'Algo deu errado no servidor. Tente de novo em instantes.'
 }
@@ -101,9 +114,10 @@ async function request<T>(
 
 export const api = {
   register: (username: string, password: string) =>
-    request<void>('/auth/register', { method: 'POST', body: { username, password } }),
+    request<{ id: string; username: string }>('/auth/register', { method: 'POST', body: { username, password } }),
   login: (username: string, password: string) =>
     request<LoginResponse>('/auth/login', { method: 'POST', body: { username, password } }),
   me: () => request<User>('/me', { auth: true }),
+  history: () => request<MatchHistoryEntry[]>('/matches/history', { auth: true }),
   ranking: (limit = 20) => request<RankingEntry[]>(`/ranking?limit=${limit}`, { auth: true }),
 }

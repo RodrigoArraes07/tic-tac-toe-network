@@ -14,6 +14,8 @@ export function resultDetail(result: MatchResult, reason: EndReason): string {
       return 'O tabuleiro encheu sem ninguém fechar três em linha.'
     case 'FORFEIT':
       return result === 'WIN' ? 'Seu adversário desistiu.' : 'Você desistiu da partida.'
+    case 'TIMEOUT':
+      return result === 'WIN' ? 'Seu adversário não jogou a tempo.' : 'Seu tempo para jogar acabou.'
     case 'DISCONNECT':
       return result === 'WIN' ? 'Seu adversário perdeu a conexão.' : 'Você ficou sem conexão por tempo demais.'
   }

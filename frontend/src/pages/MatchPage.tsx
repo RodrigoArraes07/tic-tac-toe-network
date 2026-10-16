@@ -7,6 +7,7 @@ import { resultDetail, resultTitle } from '../components/result-text'
 import { useMatch } from '../context/match-context'
 import { useCountdown } from '../hooks/useCountdown'
 import { useSocketStatus } from '../hooks/useSocketStatus'
+import { TURN_TIMEOUT_S } from '../protocol'
 
 export function MatchPage() {
   const { id } = useParams()
@@ -14,6 +15,11 @@ export function MatchPage() {
   const socketStatus = useSocketStatus()
   const [confirmingForfeit, setConfirmingForfeit] = useState(false)
   const awayLeft = useCountdown(state.opponentAwayUntil)
+  const turnDeadline =
+    state.status === 'playing' && state.turnStartedAt !== null && state.opponentAwayUntil === null
+      ? state.turnStartedAt + TURN_TIMEOUT_S * 1000
+      : null
+  const turnLeft = useCountdown(turnDeadline)
 
   // Abriu /match/:id direto (ou recarregou): pede o estado oficial ao servidor.
   useEffect(() => {
@@ -60,6 +66,12 @@ export function MatchPage() {
           )}
         </p>
       </header>
+
+      {turnDeadline !== null && known && (
+        <p className={turnLeft <= 10 ? 'match__timer match__timer--low' : 'match__timer'}>
+          {myTurn ? 'Você tem' : `${state.opponent ?? 'Seu adversário'} tem`} {turnLeft}s para jogar.
+        </p>
+      )}
 
       {playing && state.opponentAwayUntil !== null && (
         <div className="banner banner--warn" role="status">

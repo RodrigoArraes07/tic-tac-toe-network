@@ -18,6 +18,8 @@ export interface MatchState {
   end: MatchEnd | null
   /** Adversário caiu: até quando a janela de reconexão vale (timestamp em ms). */
   opponentAwayUntil: number | null
+  /** Quando o turno atual começou para este cliente (ms). Aproximação local: o protocolo não envia prazo. */
+  turnStartedAt: number | null
   /** Jogada enviada, esperando o servidor confirmar (seção 13.4). */
   pending: { cell: number; id: string } | null
 }
@@ -35,12 +37,13 @@ export const initialMatch: MatchState = {
   status: 'idle',
   end: null,
   opponentAwayUntil: null,
+  turnStartedAt: null,
   pending: null,
 }
 
 export type MatchAction =
-  | { type: 'started'; payload: ServerPayloads['MATCH_STARTED'] }
-  | { type: 'state'; payload: ServerPayloads['MATCH_STATE'] }
+  | { type: 'started'; payload: ServerPayloads['MATCH_STARTED']; at: number }
+  | { type: 'state'; payload: ServerPayloads['MATCH_STATE']; at: number }
   | { type: 'ended'; payload: ServerPayloads['MATCH_ENDED'] }
   | { type: 'opponent_away'; until: number }
   | { type: 'opponent_back' }
@@ -62,6 +65,7 @@ export function matchReducer(state: MatchState, action: MatchAction): MatchState
         turn: p.turn,
         seq: p.seq,
         status: 'playing',
+        turnStartedAt: action.at,
       }
     }
 
@@ -79,6 +83,8 @@ export function matchReducer(state: MatchState, action: MatchAction): MatchState
         seq: p.seq,
         lastMove: p.last_move,
         status: base.status === 'ended' ? 'ended' : 'playing',
+        // Mesma jogada (ex.: resposta a MATCH_SYNC): mantém o relógio do turno.
+        turnStartedAt: base.seq === p.seq && base.turnStartedAt !== null ? base.turnStartedAt : action.at,
         pending: null,
       }
     }
@@ -92,6 +98,7 @@ export function matchReducer(state: MatchState, action: MatchAction): MatchState
         status: 'ended',
         end: { result: p.result, reason: p.reason, winningLine: p.winning_line },
         opponentAwayUntil: null,
+        turnStartedAt: null,
         pending: null,
       }
     }

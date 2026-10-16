@@ -7,7 +7,10 @@ export type Board = Cell[]
 
 export type PresenceStatus = 'FREE' | 'IN_MATCH'
 export type MatchResult = 'WIN' | 'LOSS' | 'DRAW'
-export type EndReason = 'LINE' | 'DRAW' | 'FORFEIT' | 'DISCONNECT'
+export type EndReason = 'LINE' | 'DRAW' | 'FORFEIT' | 'DISCONNECT' | 'TIMEOUT'
+
+/** Cada jogador tem 30 s por turno; estourou, a partida termina com reason TIMEOUT (seção 7.4). */
+export const TURN_TIMEOUT_S = 30
 
 export interface OnlineUser {
   username: string
@@ -72,9 +75,7 @@ export interface ServerPayloads {
     turn: PlayerSymbol
     seq: number
     last_move: LastMove | null
-    // NÃO estão no guia, mas são necessários para recarregar a página ou
-    // reconectar no meio da partida (o cliente precisa saber seu símbolo).
-    // Pedir ao Integrante A para incluir no MATCH_STATE.
+    // Só vêm na resposta a MATCH_SYNC (não nas atualizações após cada jogada).
     you_are?: PlayerSymbol
     opponent?: string
   }
