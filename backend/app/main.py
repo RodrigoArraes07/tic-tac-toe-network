@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
@@ -14,10 +15,12 @@ from app.api.ranking import router as ranking_router
 from app.core.config import Settings
 from app.core.database import create_client, ping
 from app.core.event_bus import EventBus
-from app.core.logging import configure_logging
+from app.core.logging import AUDIT_QUEUE_MAX_SIZE, AuditLogHandler, AuditQueue, configure_logging
+from app.repositories.events import EventRepository
 from app.repositories.matches import MatchRepository
 from app.repositories.users import UserRepository
 from app.services import game_engine
+from app.services.audit import AuditService
 from app.services.auth import AuthService
 from app.services.game_engine import GameEngineService
 from app.services.game_handlers import GameHandlers, MatchFinisher
@@ -31,6 +34,26 @@ INTERNAL_ERROR_MESSAGE = "Erro interno."
 
 logger = logging.getLogger(__name__)
 
+type Audit = tuple[AuditLogHandler, AuditService]
+
+
+async def _start_audit(repository: EventRepository) -> Audit:
+    await repository.ensure_indexes()
+    queue: AuditQueue = asyncio.Queue(maxsize=AUDIT_QUEUE_MAX_SIZE)
+    handler = AuditLogHandler()
+    handler.bind(asyncio.get_running_loop(), queue)
+    logging.getLogger().addHandler(handler)
+    service = AuditService(repository, queue)
+    service.start()
+    return handler, service
+
+
+async def _stop_audit(audit: Audit) -> None:
+    handler, service = audit
+    logging.getLogger().removeHandler(handler)
+    handler.unbind()
+    await service.stop()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -43,6 +66,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     db = client[settings.mongo_db]
     users = UserRepository(db)
     match_repo = MatchRepository(db)
+    events = EventRepository(db)
 
     app.state.user_repository = users
     app.state.match_repository = match_repo
@@ -70,6 +94,7 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     db_available = await ping(client)
     if db_available:
         await users.ensure_indexes()
+    audit = await _start_audit(events) if settings.audit_enabled and db_available else None
     db_status = "ok" if db_available else "error"
     logger.info("server.started", extra={"details": {"version": __version__, "db": db_status}})
     try:
@@ -77,8 +102,10 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     finally:
         engine.close()
         invite_service.close()
-        await client.close()
         logger.info("server.stopped", extra={"details": {"version": __version__}})
+        if audit is not None:
+            await _stop_audit(audit)
+        await client.close()
 
 
 async def handle_unexpected_error(request: Request, exc: Exception) -> JSONResponse:

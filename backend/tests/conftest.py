@@ -15,6 +15,8 @@ os.environ.setdefault("MONGO_DB", "jogo_da_velha")
 os.environ.setdefault("JWT_SECRET", "segredo-usado-apenas-nos-testes-automatizados")
 os.environ.setdefault("JWT_EXPIRES_MINUTES", "60")
 os.environ.setdefault("INVITE_TIMEOUT_S", "30")
+# A suíte não grava na coleção events; só tests/integration/test_audit.py liga a auditoria.
+os.environ["AUDIT_ENABLED"] = "false"
 
 TEST_USERNAME_PREFIX = "t_"
 TEST_USERNAME_SUFFIX_LENGTH = 12

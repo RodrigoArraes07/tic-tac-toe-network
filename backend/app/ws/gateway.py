@@ -2,6 +2,7 @@ import asyncio
 import contextlib
 import json
 import logging
+import time
 from typing import Any
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
@@ -19,6 +20,7 @@ router = APIRouter()
 
 MAX_MESSAGE_SIZE_BYTES = 4096
 AUTH_TIMEOUT_SECONDS = 5.0
+MESSAGE_TOO_BIG_CODE = 1009
 AUTH_EVENT = "cmd.auth"
 ERROR_MESSAGES = {
     "INVALID_MESSAGE": "JSON malformado ou fora do schema.",
@@ -49,13 +51,16 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     auth_service: AuthService = websocket.app.state.auth_service
     event_bus: EventBus = websocket.app.state.event_bus
     engine: GameEngineService = websocket.app.state.game_engine
+    client_ip = websocket.client.host if websocket.client else None
+    client_port = websocket.client.port if websocket.client else None
+    close_code: int | None = None
 
     # Autenticação Inicial
     try:
         raw_data = await asyncio.wait_for(websocket.receive_text(), timeout=AUTH_TIMEOUT_SECONDS)
 
         if len(raw_data.encode("utf-8")) > MAX_MESSAGE_SIZE_BYTES:
-            await websocket.close(code=1009, reason="Mensagem grande demais")
+            await websocket.close(code=MESSAGE_TOO_BIG_CODE, reason="Mensagem grande demais")
             return
 
         envelope_dict = json.loads(raw_data)
@@ -70,7 +75,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         user = await auth_service.get_user_from_token(auth_payload.token)
 
         if not user:
-            logger.warning("ws.auth_failed: token invalido ou usuario nao encontrado")
+            details = {"ip": client_ip, "reason": "invalid_token"}
+            logger.warning("security.auth_failed", extra={"details": details})
             await websocket.close(code=4401, reason="Token inválido ou expirado")
             return
 
@@ -96,6 +102,15 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         )
         await websocket.send_text(snapshot_msg.model_dump_json())
 
+        connected_at = time.monotonic()
+        connection_details = {
+            "user_id": authenticated_user_id,
+            "username": authenticated_username,
+            "ip": client_ip,
+            "port": client_port,
+        }
+        logger.info("user.connected", extra={"details": connection_details})
+
         await event_bus.publish(
             Event(
                 type="user.connected",
@@ -105,7 +120,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
         )
 
     except Exception as err:
-        logger.error(f"ws.handshake_error: {type(err).__name__} - {err}")
+        details = {"ip": client_ip, "reason": type(err).__name__}
+        logger.warning("security.auth_failed", extra={"details": details})
         with contextlib.suppress(Exception):
             await websocket.close(code=4401, reason="Não autenticado")
         return
@@ -116,7 +132,8 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
             raw_data = await websocket.receive_text()
 
             if len(raw_data.encode("utf-8")) > MAX_MESSAGE_SIZE_BYTES:
-                await websocket.close(code=1009, reason="Mensagem excedeu 4KB")
+                close_code = MESSAGE_TOO_BIG_CODE
+                await websocket.close(code=close_code, reason="Mensagem excedeu 4KB")
                 break
 
             parsed: Any = None
@@ -146,13 +163,16 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                 )
             )
 
-    except WebSocketDisconnect:
-        pass
+    except WebSocketDisconnect as disconnect:
+        close_code = disconnect.code
     finally:
         went_offline = authenticated_user_id is not None and await connection_manager.disconnect(
             authenticated_user_id, websocket
         )
         if went_offline:
+            duration = round(time.monotonic() - connected_at, 1)
+            details = {**connection_details, "close_code": close_code, "duration_s": duration}
+            logger.info("user.disconnected", extra={"details": details})
             await event_bus.publish(
                 Event(
                     type="user.disconnected",

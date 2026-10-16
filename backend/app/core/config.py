@@ -11,3 +11,4 @@ class Settings(BaseSettings):
     jwt_secret: SecretStr = Field(min_length=JWT_SECRET_MIN_LENGTH)
     jwt_expires_minutes: int
     invite_timeout_s: int = Field(gt=0)
+    audit_enabled: bool = True
