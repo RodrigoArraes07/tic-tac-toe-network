@@ -1,6 +1,6 @@
-import { useSyncExternalStore } from 'react'
-import { gameSocket, type SocketStatus } from '../socket'
+import { useSyncExternalStore } from 'react';
+import { gameSocket, type SocketStatus } from '../socket';
 
 export function useSocketStatus(): SocketStatus {
-  return useSyncExternalStore(gameSocket.subscribeStatus, gameSocket.getStatus)
+  return useSyncExternalStore(gameSocket.subscribeStatus, gameSocket.getStatus);
 }

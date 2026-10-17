@@ -1,10 +1,10 @@
-import { RankingTable } from '../components/RankingTable'
-import { useAuth } from '../context/auth-context'
-import { useRanking } from '../hooks/useRanking'
+import { RankingTable } from '../components/RankingTable';
+import { useAuth } from '../context/auth-context';
+import { useRanking } from '../hooks/useRanking';
 
 export function RankingPage() {
-  const { user } = useAuth()
-  const { state, reload } = useRanking(50)
+  const { user } = useAuth();
+  const { state, reload } = useRanking(50);
 
   return (
     <section className="sheet">
@@ -21,5 +21,5 @@ export function RankingPage() {
       )}
       {state.status === 'ready' && <RankingTable entries={state.entries} me={user?.username} />}
     </section>
-  )
+  );
 }

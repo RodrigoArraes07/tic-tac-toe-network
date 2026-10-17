@@ -1,24 +1,24 @@
-import { useEffect } from 'react'
-import { Link, NavLink, Outlet } from 'react-router-dom'
-import { useAuth } from '../context/auth-context'
-import { useToast } from '../context/toast-context'
-import { gameSocket } from '../socket'
-import { ConnectionBadge } from './ConnectionBadge'
-import { InviteDialog } from './InviteDialog'
+import { useEffect } from 'react';
+import { Link, NavLink, Outlet } from 'react-router-dom';
+import { useAuth } from '../context/auth-context';
+import { useToast } from '../context/toast-context';
+import { gameSocket } from '../socket';
+import { ConnectionBadge } from './ConnectionBadge';
+import { InviteDialog } from './InviteDialog';
 
 export function Layout() {
-  const { user, socketStatus, logout, resumeSocket } = useAuth()
-  const toast = useToast()
+  const { user, socketStatus, logout, resumeSocket } = useAuth();
+  const toast = useToast();
 
   // Todo ERROR do servidor vira um aviso curto (seção 13.4).
   useEffect(
     () =>
       gameSocket.subscribe('ERROR', (m) => {
-        if (m.payload.code === 'STALE_STATE') return // o MatchProvider ressincroniza em silêncio
-        toast.push(m.payload.message, 'error')
+        if (m.payload.code === 'STALE_STATE') return; // o MatchProvider ressincroniza em silêncio
+        toast.push(m.payload.message, 'error');
       }),
     [toast],
-  )
+  );
 
   return (
     <>
@@ -53,5 +53,5 @@ export function Layout() {
       </main>
       <InviteDialog />
     </>
-  )
+  );
 }

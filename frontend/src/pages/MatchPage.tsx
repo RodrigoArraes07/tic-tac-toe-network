@@ -1,30 +1,30 @@
-import { useEffect, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
-import { Board } from '../components/Board'
-import { Modal } from '../components/Modal'
-import { ResultDialog } from '../components/ResultDialog'
-import { resultDetail, resultTitle } from '../components/result-text'
-import { useMatch } from '../context/match-context'
-import { useCountdown } from '../hooks/useCountdown'
-import { useSocketStatus } from '../hooks/useSocketStatus'
-import { TURN_TIMEOUT_S } from '../protocol'
+import { useEffect, useState } from 'react';
+import { Link, useParams } from 'react-router-dom';
+import { Board } from '../components/Board';
+import { Modal } from '../components/Modal';
+import { ResultDialog } from '../components/ResultDialog';
+import { resultDetail, resultTitle } from '../components/result-text';
+import { useMatch } from '../context/match-context';
+import { useCountdown } from '../hooks/useCountdown';
+import { useSocketStatus } from '../hooks/useSocketStatus';
+import { TURN_TIMEOUT_S } from '../protocol';
 
 export function MatchPage() {
-  const { id } = useParams()
-  const { state, playMove, forfeit, syncMatch, leaveMatch } = useMatch()
-  const socketStatus = useSocketStatus()
-  const [confirmingForfeit, setConfirmingForfeit] = useState(false)
-  const awayLeft = useCountdown(state.opponentAwayUntil)
+  const { id } = useParams();
+  const { state, playMove, forfeit, syncMatch, leaveMatch } = useMatch();
+  const socketStatus = useSocketStatus();
+  const [confirmingForfeit, setConfirmingForfeit] = useState(false);
+  const awayLeft = useCountdown(state.opponentAwayUntil);
   const turnDeadline =
     state.status === 'playing' && state.turnStartedAt !== null && state.opponentAwayUntil === null
       ? state.turnStartedAt + TURN_TIMEOUT_S * 1000
-      : null
-  const turnLeft = useCountdown(turnDeadline)
+      : null;
+  const turnLeft = useCountdown(turnDeadline);
 
   // Abriu /match/:id direto (ou recarregou): pede o estado oficial ao servidor.
   useEffect(() => {
-    if (id && socketStatus === 'open' && state.matchId !== id) syncMatch(id)
-  }, [id, socketStatus, state.matchId, syncMatch])
+    if (id && socketStatus === 'open' && state.matchId !== id) syncMatch(id);
+  }, [id, socketStatus, state.matchId, syncMatch]);
 
   if (state.status === 'idle' || state.matchId !== id) {
     return (
@@ -34,18 +34,18 @@ export function MatchPage() {
           Se isso demorar, <Link to="/lobby">volte ao lobby</Link>.
         </p>
       </div>
-    )
+    );
   }
 
-  const playing = state.status === 'playing'
-  const myTurn = playing && state.turn !== null && state.turn === state.you
-  const known = state.you !== null
+  const playing = state.status === 'playing';
+  const myTurn = playing && state.turn !== null && state.turn === state.you;
+  const known = state.you !== null;
 
-  let headline: string
-  if (state.status === 'ended' && state.end) headline = resultTitle(state.end.result)
-  else if (!known) headline = 'Sincronizando partida…'
-  else if (myTurn) headline = 'Sua vez'
-  else headline = `Vez de ${state.opponent ?? 'o adversário'}`
+  let headline: string;
+  if (state.status === 'ended' && state.end) headline = resultTitle(state.end.result);
+  else if (!known) headline = 'Sincronizando partida…';
+  else if (myTurn) headline = 'Sua vez';
+  else headline = `Vez de ${state.opponent ?? 'o adversário'}`;
 
   return (
     <div className="match">
@@ -69,13 +69,15 @@ export function MatchPage() {
 
       {turnDeadline !== null && known && (
         <p className={turnLeft <= 10 ? 'match__timer match__timer--low' : 'match__timer'}>
-          {myTurn ? 'Você tem' : `${state.opponent ?? 'Seu adversário'} tem`} {turnLeft}s para jogar.
+          {myTurn ? 'Você tem' : `${state.opponent ?? 'Seu adversário'} tem`} {turnLeft}s para
+          jogar.
         </p>
       )}
 
       {playing && state.opponentAwayUntil !== null && (
         <div className="banner banner--warn" role="status">
-          {state.opponent ?? 'Seu adversário'} perdeu a conexão. Ele tem {awayLeft}s para voltar antes de a partida acabar.
+          {state.opponent ?? 'Seu adversário'} perdeu a conexão. Ele tem {awayLeft}s para voltar
+          antes de a partida acabar.
         </div>
       )}
 
@@ -90,7 +92,11 @@ export function MatchPage() {
 
       <div className="match__actions">
         {playing ? (
-          <button type="button" className="btn btn--danger" onClick={() => setConfirmingForfeit(true)}>
+          <button
+            type="button"
+            className="btn btn--danger"
+            onClick={() => setConfirmingForfeit(true)}
+          >
             Desistir
           </button>
         ) : (
@@ -100,18 +106,27 @@ export function MatchPage() {
         )}
       </div>
 
-      <Modal open={confirmingForfeit} title="Desistir da partida?" onEscape={() => setConfirmingForfeit(false)}>
+      <Modal
+        open={confirmingForfeit}
+        title="Desistir da partida?"
+        onEscape={() => setConfirmingForfeit(false)}
+      >
         <p>Seu adversário vence e a derrota entra no seu ranking.</p>
         <div className="modal__actions">
-          <button type="button" className="btn btn--ghost" autoFocus onClick={() => setConfirmingForfeit(false)}>
+          <button
+            type="button"
+            className="btn btn--ghost"
+            autoFocus
+            onClick={() => setConfirmingForfeit(false)}
+          >
             Continuar jogando
           </button>
           <button
             type="button"
             className="btn btn--danger"
             onClick={() => {
-              setConfirmingForfeit(false)
-              forfeit()
+              setConfirmingForfeit(false);
+              forfeit();
             }}
           >
             Desistir
@@ -121,5 +136,5 @@ export function MatchPage() {
 
       <ResultDialog />
     </div>
-  )
+  );
 }

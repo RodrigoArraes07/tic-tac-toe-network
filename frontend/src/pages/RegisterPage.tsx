@@ -1,40 +1,45 @@
-import { useState, type FormEvent } from 'react'
-import { Link, Navigate, useNavigate } from 'react-router-dom'
-import { useAuth } from '../context/auth-context'
-import { validatePassword, validateUsername } from '../validation'
-import { AuthLayout } from './AuthLayout'
+import { useState, type FormEvent } from 'react';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { useAuth } from '../context/auth-context';
+import { validatePassword, validateUsername } from '../validation';
+import { AuthLayout } from './AuthLayout';
 
 export function RegisterPage() {
-  const { status, register } = useAuth()
-  const navigate = useNavigate()
+  const { status, register } = useAuth();
+  const navigate = useNavigate();
 
-  const [username, setUsername] = useState('')
-  const [password, setPassword] = useState('')
-  const [confirm, setConfirm] = useState('')
-  const [errors, setErrors] = useState<{ username?: string; password?: string; confirm?: string; form?: string }>({})
-  const [submitting, setSubmitting] = useState(false)
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirm, setConfirm] = useState('');
+  const [errors, setErrors] = useState<{
+    username?: string;
+    password?: string;
+    confirm?: string;
+    form?: string;
+  }>({});
+  const [submitting, setSubmitting] = useState(false);
 
-  if (status === 'authed') return <Navigate to="/lobby" replace />
+  if (status === 'authed') return <Navigate to="/lobby" replace />;
 
   async function onSubmit(e: FormEvent) {
-    e.preventDefault()
-    if (submitting) return
-    const name = username.trim()
+    e.preventDefault();
+    if (submitting) return;
+    const name = username.trim();
     const next = {
       username: validateUsername(name) ?? undefined,
       password: validatePassword(password) ?? undefined,
       confirm: confirm !== password ? 'As senhas não são iguais.' : undefined,
-    }
-    setErrors(next)
-    if (next.username || next.password || next.confirm) return
+    };
+    setErrors(next);
+    if (next.username || next.password || next.confirm) return;
 
-    setSubmitting(true)
+    setSubmitting(true);
     try {
-      await register(name, password)
-      navigate('/login', { replace: true, state: { registered: true, username: name } })
+      await register(name, password);
+      navigate('/login', { replace: true, state: { registered: true, username: name } });
     } catch (err) {
-      setErrors({ form: (err as Error).message })
-      setSubmitting(false)
+      setErrors({ form: (err as Error).message });
+      setSubmitting(false);
     }
   }
 
@@ -54,7 +59,10 @@ export function RegisterPage() {
             aria-describedby="username-help"
             autoFocus
           />
-          <p id="username-help" className={errors.username ? 'field__help field__help--error' : 'field__help'}>
+          <p
+            id="username-help"
+            className={errors.username ? 'field__help field__help--error' : 'field__help'}
+          >
             {errors.username ?? '3 a 20 caracteres: letras, números e _.'}
           </p>
         </div>
@@ -69,7 +77,10 @@ export function RegisterPage() {
             aria-invalid={Boolean(errors.password)}
             aria-describedby="password-help"
           />
-          <p id="password-help" className={errors.password ? 'field__help field__help--error' : 'field__help'}>
+          <p
+            id="password-help"
+            className={errors.password ? 'field__help field__help--error' : 'field__help'}
+          >
             {errors.password ?? 'De 8 a 72 caracteres.'}
           </p>
         </div>
@@ -101,5 +112,5 @@ export function RegisterPage() {
         Já tem conta? <Link to="/login">Entrar</Link>
       </p>
     </AuthLayout>
-  )
+  );
 }

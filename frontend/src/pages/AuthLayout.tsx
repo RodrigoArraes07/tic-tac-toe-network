@@ -1,9 +1,9 @@
-import type { ReactNode } from 'react'
-import { Board } from '../components/Board'
-import type { Board as BoardType } from '../protocol'
+import type { ReactNode } from 'react';
+import { Board } from '../components/Board';
+import type { Board as BoardType } from '../protocol';
 
 // Partida de exemplo só para ilustrar a tela de entrada.
-const SAMPLE: BoardType = ['X', 'O', null, null, 'X', 'O', null, null, 'X']
+const SAMPLE: BoardType = ['X', 'O', null, null, 'X', 'O', null, null, 'X'];
 
 export function AuthLayout({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -20,5 +20,5 @@ export function AuthLayout({ title, children }: { title: string; children: React
         {children}
       </section>
     </main>
-  )
+  );
 }
