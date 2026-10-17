@@ -1,10 +1,10 @@
-import { useAuth } from '../context/auth-context'
-import { useRanking } from '../hooks/useRanking'
-import { RankingTable } from './RankingTable'
+import { useAuth } from '../context/auth-context';
+import { useRanking } from '../hooks/useRanking';
+import { RankingTable } from './RankingTable';
 
 export function RankingPanel() {
-  const { user } = useAuth()
-  const { state, reload } = useRanking(10)
+  const { user } = useAuth();
+  const { state, reload } = useRanking(10);
 
   return (
     <section className="sheet" aria-labelledby="rk-title">
@@ -20,7 +20,9 @@ export function RankingPanel() {
           </button>
         </p>
       )}
-      {state.status === 'ready' && <RankingTable entries={state.entries} me={user?.username} compact />}
+      {state.status === 'ready' && (
+        <RankingTable entries={state.entries} me={user?.username} compact />
+      )}
     </section>
-  )
+  );
 }

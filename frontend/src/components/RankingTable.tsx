@@ -1,8 +1,18 @@
-import type { RankingEntry } from '../api'
+import type { RankingEntry } from '../api';
 
-export function RankingTable({ entries, me, compact }: { entries: RankingEntry[]; me?: string; compact?: boolean }) {
+export function RankingTable({
+  entries,
+  me,
+  compact,
+}: {
+  entries: RankingEntry[];
+  me?: string;
+  compact?: boolean;
+}) {
   if (entries.length === 0) {
-    return <p className="empty">Ainda não há partidas encerradas. Vença a primeira e apareça aqui.</p>
+    return (
+      <p className="empty">Ainda não há partidas encerradas. Vença a primeira e apareça aqui.</p>
+    );
   }
   return (
     <table className="table">
@@ -46,5 +56,5 @@ export function RankingTable({ entries, me, compact }: { entries: RankingEntry[]
         ))}
       </tbody>
     </table>
-  )
+  );
 }

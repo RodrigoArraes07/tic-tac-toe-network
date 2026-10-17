@@ -1,10 +1,10 @@
-import { useCountdown } from '../hooks/useCountdown'
-import { useLobby } from '../context/lobby-context'
+import { useCountdown } from '../hooks/useCountdown';
+import { useLobby } from '../context/lobby-context';
 
 export function OutgoingInvite() {
-  const { state, cancelInvite } = useLobby()
-  const left = useCountdown(state.outgoing?.expiresAt ?? null)
-  if (!state.outgoing) return null
+  const { state, cancelInvite } = useLobby();
+  const left = useCountdown(state.outgoing?.expiresAt ?? null);
+  if (!state.outgoing) return null;
 
   return (
     <div className="banner" role="status">
@@ -15,5 +15,5 @@ export function OutgoingInvite() {
         Cancelar convite
       </button>
     </div>
-  )
+  );
 }

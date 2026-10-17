@@ -1,39 +1,39 @@
-import { useState, type FormEvent } from 'react'
-import { Link, Navigate, useLocation } from 'react-router-dom'
-import { useAuth } from '../context/auth-context'
-import { AuthLayout } from './AuthLayout'
+import { useState, type FormEvent } from 'react';
+import { Link, Navigate, useLocation } from 'react-router-dom';
+import { useAuth } from '../context/auth-context';
+import { AuthLayout } from './AuthLayout';
 
 interface LoginLocationState {
-  registered?: boolean
-  username?: string
+  registered?: boolean;
+  username?: string;
 }
 
 export function LoginPage() {
-  const { status, login } = useAuth()
-  const location = useLocation()
-  const hint = (location.state ?? {}) as LoginLocationState
+  const { status, login } = useAuth();
+  const location = useLocation();
+  const hint = (location.state ?? {}) as LoginLocationState;
 
-  const [username, setUsername] = useState(hint.username ?? '')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState<string | null>(null)
-  const [submitting, setSubmitting] = useState(false)
+  const [username, setUsername] = useState(hint.username ?? '');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  if (status === 'authed') return <Navigate to="/lobby" replace />
+  if (status === 'authed') return <Navigate to="/lobby" replace />;
 
   async function onSubmit(e: FormEvent) {
-    e.preventDefault()
-    if (submitting) return
+    e.preventDefault();
+    if (submitting) return;
     if (!username.trim() || !password) {
-      setError('Informe usuário e senha.')
-      return
+      setError('Informe usuário e senha.');
+      return;
     }
-    setSubmitting(true)
-    setError(null)
+    setSubmitting(true);
+    setError(null);
     try {
-      await login(username.trim(), password)
+      await login(username.trim(), password);
     } catch (err) {
-      setError((err as Error).message)
-      setSubmitting(false)
+      setError((err as Error).message);
+      setSubmitting(false);
     }
   }
 
@@ -81,5 +81,5 @@ export function LoginPage() {
         Ainda não tem conta? <Link to="/register">Criar conta</Link>
       </p>
     </AuthLayout>
-  )
+  );
 }

@@ -1,24 +1,24 @@
-import { useEffect, useId, useRef, type ReactNode } from 'react'
+import { useEffect, useId, useRef, type ReactNode } from 'react';
 
 interface ModalProps {
-  open: boolean
-  title: string
-  children: ReactNode
+  open: boolean;
+  title: string;
+  children: ReactNode;
   /** Chamado ao apertar Esc. Sem isso, Esc não fecha. */
-  onEscape?: () => void
+  onEscape?: () => void;
 }
 
 /** Usa o <dialog> nativo: já prende o foco e deixa o resto da página inerte. */
 export function Modal({ open, title, children, onEscape }: ModalProps) {
-  const ref = useRef<HTMLDialogElement>(null)
-  const titleId = useId()
+  const ref = useRef<HTMLDialogElement>(null);
+  const titleId = useId();
 
   useEffect(() => {
-    const dialog = ref.current
-    if (!dialog) return
-    if (open && !dialog.open) dialog.showModal()
-    if (!open && dialog.open) dialog.close()
-  }, [open])
+    const dialog = ref.current;
+    if (!dialog) return;
+    if (open && !dialog.open) dialog.showModal();
+    if (!open && dialog.open) dialog.close();
+  }, [open]);
 
   return (
     <dialog
@@ -26,8 +26,8 @@ export function Modal({ open, title, children, onEscape }: ModalProps) {
       className="modal"
       aria-labelledby={titleId}
       onCancel={(e) => {
-        e.preventDefault()
-        onEscape?.()
+        e.preventDefault();
+        onEscape?.();
       }}
     >
       {open && (
@@ -39,5 +39,5 @@ export function Modal({ open, title, children, onEscape }: ModalProps) {
         </div>
       )}
     </dialog>
-  )
+  );
 }

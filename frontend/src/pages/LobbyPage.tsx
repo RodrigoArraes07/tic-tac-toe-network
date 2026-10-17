@@ -1,6 +1,6 @@
-import { OutgoingInvite } from '../components/OutgoingInvite'
-import { RankingPanel } from '../components/RankingPanel'
-import { UserList } from '../components/UserList'
+import { OutgoingInvite } from '../components/OutgoingInvite';
+import { RankingPanel } from '../components/RankingPanel';
+import { UserList } from '../components/UserList';
 
 export function LobbyPage() {
   return (
@@ -16,5 +16,5 @@ export function LobbyPage() {
       </div>
       <RankingPanel />
     </div>
-  )
+  );
 }

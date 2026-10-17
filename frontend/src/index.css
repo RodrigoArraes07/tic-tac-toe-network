@@ -35,7 +35,8 @@ body {
   line-height: 1.5;
   background-color: var(--paper);
   background-image:
-    linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+    linear-gradient(var(--grid) 1px, transparent 1px),
+    linear-gradient(90deg, var(--grid) 1px, transparent 1px);
   background-size: 28px 28px;
 }
 
@@ -473,6 +474,18 @@ a {
 
 .match__head p {
   margin: 0.2rem 0 0;
+}
+
+.match__timer {
+  margin: 0;
+  text-align: center;
+  color: var(--ink-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.match__timer--low {
+  color: var(--bad);
+  font-weight: 600;
 }
 
 .match__actions {
