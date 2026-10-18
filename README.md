@@ -219,6 +219,7 @@ docker compose up -d --build
 ## Documentação
 
 - [Protocolo de comunicação](docs/protocolo.md)
+- [Deploy em produção](infra/deploy/README.md)
 - [Como contribuir](CONTRIBUTING.md)
 
 ## Como contribuir
