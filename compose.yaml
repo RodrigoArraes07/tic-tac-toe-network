@@ -1,0 +1,84 @@
+services:
+  mongo:
+    image: mongo:8.0
+    environment:
+      GLIBC_TUNABLES: "glibc.pthread.rseq=1"
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USER}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_APP_USER: ${MONGO_APP_USER}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD}
+      MONGO_DB: ${MONGO_DB}
+    volumes:
+      - mongo-data:/data/db
+      - ./infra/mongo/init-app-user.js:/docker-entrypoint-initdb.d/init-app-user.js:ro
+    ports:
+      - "127.0.0.1:27017:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  backend:
+    build: ./backend
+    env_file: .env
+    environment:
+      # O bind mount no Windows não propaga eventos de arquivo para o container.
+      WATCHFILES_FORCE_POLLING: "true"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./backend/app:/app/app
+    # Cabeçalhos de proxy só são aceitos do IP fixo do nginx; quem acessa a
+    # porta 8000 direto não consegue falsificar X-Forwarded-For.
+    command: >
+      uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000 --reload
+      --proxy-headers --forwarded-allow-ips 172.28.0.10
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health', timeout=3)"
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  nginx:
+    profiles: ["https"]
+    build:
+      context: .
+      dockerfile: infra/nginx/Dockerfile
+    depends_on:
+      backend:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/certs:/etc/nginx/certs:ro
+    networks:
+      default:
+        # Mesmo IP do --forwarded-allow-ips do backend.
+        ipv4_address: 172.28.0.10
+    healthcheck:
+      # -k: a CA do mkcert não é confiável dentro do container.
+      test: ["CMD", "curl", "-fsk", "https://localhost/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 5s
+
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 172.28.0.0/24
+
+volumes:
+  mongo-data:
