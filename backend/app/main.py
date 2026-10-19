@@ -85,9 +85,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = GameEngineService(
         on_match_end=finisher.finish,
         turn_timeout_seconds=game_engine.TURN_TIMEOUT_SECONDS,
+        reconnect_grace_seconds=settings.reconnect_grace_s,
     )
     app.state.game_engine = engine
-    GameHandlers(engine, finisher, connection_manager).subscribe(event_bus)
+    handlers = GameHandlers(engine, finisher, connection_manager, settings.reconnect_grace_s)
+    handlers.subscribe(event_bus)
     invite_service = InviteService(engine, connection_manager, settings.invite_timeout_s)
     InviteHandlers(invite_service).subscribe(event_bus)
 

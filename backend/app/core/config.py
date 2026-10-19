@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     jwt_secret: SecretStr = Field(min_length=JWT_SECRET_MIN_LENGTH)
     jwt_expires_minutes: int
     invite_timeout_s: int = Field(gt=0)
+    reconnect_grace_s: int = Field(gt=0)
     audit_enabled: bool = True
     ws_rate_per_second: float = Field(default=10, gt=0)
     ws_rate_burst: int = Field(default=20, gt=0)

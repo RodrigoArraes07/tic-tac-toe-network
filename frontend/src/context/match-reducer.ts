@@ -53,7 +53,7 @@ export type MatchAction =
   | { type: 'state'; payload: ServerPayloads['MATCH_STATE']; at: number }
   | { type: 'ended'; payload: ServerPayloads['MATCH_ENDED'] }
   | { type: 'opponent_away'; until: number }
-  | { type: 'opponent_back' }
+  | { type: 'opponent_back'; at: number }
   | { type: 'pending'; cell: number; id: string }
   | { type: 'clear_pending'; id?: string }
   | { type: 'reset' };
@@ -115,7 +115,12 @@ export function matchReducer(state: MatchState, action: MatchAction): MatchState
       return { ...state, opponentAwayUntil: action.until };
 
     case 'opponent_back':
-      return { ...state, opponentAwayUntil: null };
+      // O servidor reinicia o turno de quem tem a vez com o prazo cheio.
+      return {
+        ...state,
+        opponentAwayUntil: null,
+        turnStartedAt: state.status === 'playing' ? action.at : state.turnStartedAt,
+      };
 
     case 'pending':
       return { ...state, pending: { cell: action.cell, id: action.id } };

@@ -126,3 +126,50 @@ async def test_turn_timeout_ends_the_match_through_the_callback(
     assert len(recorder.outcomes) == 1
     assert recorder.outcomes[0].winner_id == "p2"
     assert recorder.outcomes[0].reason == EndReason.TIMEOUT
+
+
+SHORT_GRACE_SECONDS = 0.15
+
+
+async def test_disconnect_suspends_the_turn_and_expires_with_disconnect(
+    recorder: OutcomeRecorder,
+) -> None:
+    engine = GameEngineService(
+        on_match_end=recorder,
+        turn_timeout_seconds=SHORT_TURN_SECONDS,
+        reconnect_grace_seconds=SHORT_GRACE_SECONDS,
+    )
+    await engine.create_match("m1", "p1", "Player1", "p2", "Player2")
+
+    change = await engine.handle_player_disconnect("p1")
+    await asyncio.sleep(SHORT_TURN_SECONDS * 2)
+    during_window = list(recorder.outcomes)
+    await asyncio.sleep(SHORT_GRACE_SECONDS * 2)
+
+    assert change is not None
+    assert (change.match_id, change.opponent_id) == ("m1", "p2")
+    assert during_window == []
+    assert len(recorder.outcomes) == 1
+    assert recorder.outcomes[0].reason == EndReason.DISCONNECT
+    assert recorder.outcomes[0].winner_id == "p2"
+
+
+async def test_reconnect_closes_the_window_and_restarts_the_turn(
+    recorder: OutcomeRecorder,
+) -> None:
+    engine = GameEngineService(
+        on_match_end=recorder,
+        turn_timeout_seconds=SHORT_TURN_SECONDS,
+        reconnect_grace_seconds=SHORT_GRACE_SECONDS,
+    )
+    await engine.create_match("m1", "p1", "Player1", "p2", "Player2")
+    await engine.handle_player_disconnect("p1")
+
+    change = await engine.handle_player_reconnect("p1")
+    not_away = await engine.handle_player_reconnect("p2")
+    await asyncio.sleep(SHORT_TURN_SECONDS * 3)
+
+    assert change is not None
+    assert change.opponent_id == "p2"
+    assert not_away is None
+    assert [outcome.reason for outcome in recorder.outcomes] == [EndReason.TIMEOUT]

@@ -39,7 +39,9 @@ export function MatchProvider({ children }: { children: ReactNode }) {
       gameSocket.subscribe('OPPONENT_DISCONNECTED', (m) =>
         dispatch({ type: 'opponent_away', until: Date.now() + m.payload.grace_seconds * 1000 }),
       ),
-      gameSocket.subscribe('OPPONENT_RECONNECTED', () => dispatch({ type: 'opponent_back' })),
+      gameSocket.subscribe('OPPONENT_RECONNECTED', () =>
+        dispatch({ type: 'opponent_back', at: Date.now() }),
+      ),
       gameSocket.subscribe('ERROR', (m) => {
         const { pending, matchId } = stateRef.current;
         if (pending && m.ref === pending.id) dispatch({ type: 'clear_pending', id: pending.id });

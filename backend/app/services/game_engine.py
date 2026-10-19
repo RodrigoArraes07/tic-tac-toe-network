@@ -8,6 +8,7 @@ from app.domain.enums import EndReason, Symbol
 from app.domain.tictactoe import apply_move
 
 TURN_TIMEOUT_SECONDS = 30.0
+RECONNECT_GRACE_SECONDS = 30.0
 BOARD_SIZE = 9
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,8 @@ class ActiveMatch:
     seq: int = 0
     started_at: datetime = field(default_factory=lambda: datetime.now(UTC))
     timeout_task: asyncio.Task[None] | None = None
+    # Jogadores fora do ar, cada um com o timer da sua janela de reconexão.
+    grace_tasks: dict[str, asyncio.Task[None]] = field(default_factory=dict)
     is_finished: bool = False
 
     def player_with(self, symbol: Symbol) -> PlayerSession:
@@ -86,6 +89,12 @@ class MatchOutcome:
 
 
 @dataclass(frozen=True)
+class ConnectionChange:
+    match_id: str
+    opponent_id: str
+
+
+@dataclass(frozen=True)
 class MoveResult:
     state: MatchSnapshot
     last_move: dict[str, int | str]
@@ -110,9 +119,11 @@ class GameEngineService:
         self,
         on_match_end: MatchEndCallback,
         turn_timeout_seconds: float = TURN_TIMEOUT_SECONDS,
+        reconnect_grace_seconds: float = RECONNECT_GRACE_SECONDS,
     ) -> None:
         self._on_match_end = on_match_end
         self._turn_timeout_seconds = turn_timeout_seconds
+        self._reconnect_grace_seconds = reconnect_grace_seconds
         self._matches: dict[str, ActiveMatch] = {}
         self._player_match_map: dict[str, str] = {}
         self._finished_match_ids: set[str] = set()
@@ -191,7 +202,9 @@ class GameEngineService:
             if result is None:
                 match.current_turn = next_turn
                 match.turn_expires_at = self._next_turn_deadline()
-                self._start_turn_timer(match)
+                # Com alguém fora do ar o turno fica suspenso; volta na reconexão.
+                if not match.grace_tasks:
+                    self._start_turn_timer(match)
                 return MoveResult(state=_snapshot(match), last_move=last_move, outcome=None)
 
             winner_symbol = result["winner"]
@@ -211,20 +224,48 @@ class GameEngineService:
             winner = match.opponent_of(user_id)
             return self._finish(match, winner_id=winner.user_id, reason=EndReason.FORFEIT)
 
-    async def handle_player_disconnect(self, user_id: str) -> MatchOutcome | None:
-        """Encerra a partida com o motivo DISCONNECT caso um jogador caia."""
+    async def handle_player_disconnect(self, user_id: str) -> ConnectionChange | None:
+        """Abre a janela de reconexão: o turno fica suspenso até o jogador voltar."""
         async with self._lock:
-            match_id = self._player_match_map.get(user_id)
-            match = self._matches.get(match_id) if match_id else None
-            if match is None or match.is_finished:
+            match = self._active_match_of(user_id)
+            if match is None or user_id in match.grace_tasks:
                 return None
-            winner = match.opponent_of(user_id)
-            return self._finish(match, winner_id=winner.user_id, reason=EndReason.DISCONNECT)
+            self._cancel_turn_timer(match)
+            match.grace_tasks[user_id] = asyncio.create_task(
+                self._expire_grace(match.match_id, user_id)
+            )
+            details = {
+                "match_id": match.match_id,
+                "user_id": user_id,
+                "grace_s": self._reconnect_grace_seconds,
+            }
+            logger.info("match.player_disconnected", extra={"details": details})
+            return ConnectionChange(match.match_id, match.opponent_of(user_id).user_id)
+
+    async def handle_player_reconnect(self, user_id: str) -> ConnectionChange | None:
+        """Fecha a janela e, sem ninguém mais fora, reinicia o turno de quem é a vez."""
+        async with self._lock:
+            match = self._active_match_of(user_id)
+            if match is None or user_id not in match.grace_tasks:
+                return None
+            self._cancel_task(match.grace_tasks.pop(user_id))
+            if not match.grace_tasks:
+                match.turn_expires_at = self._next_turn_deadline()
+                self._start_turn_timer(match)
+            details = {"match_id": match.match_id, "user_id": user_id}
+            logger.info("match.player_reconnected", extra={"details": details})
+            return ConnectionChange(match.match_id, match.opponent_of(user_id).user_id)
 
     def close(self) -> None:
         """Cancela os temporizadores pendentes ao desligar o servidor."""
         for match in self._matches.values():
             self._cancel_turn_timer(match)
+            self._cancel_grace_timers(match)
+
+    def _active_match_of(self, user_id: str) -> ActiveMatch | None:
+        match_id = self._player_match_map.get(user_id)
+        match = self._matches.get(match_id) if match_id else None
+        return None if match is None or match.is_finished else match
 
     def _require_player_match(self, user_id: str, match_id: str) -> ActiveMatch:
         match = self._matches.get(match_id)
@@ -246,12 +287,21 @@ class GameEngineService:
         )
 
     def _cancel_turn_timer(self, match: ActiveMatch) -> None:
-        task = match.timeout_task
-        # A própria tarefa de timeout chega aqui ao encerrar a partida; cancelá-la
-        # interromperia o callback de fim de partida que ela ainda vai chamar.
-        if task is not None and task is not asyncio.current_task():
-            task.cancel()
+        if match.timeout_task is not None:
+            self._cancel_task(match.timeout_task)
         match.timeout_task = None
+
+    def _cancel_grace_timers(self, match: ActiveMatch) -> None:
+        for task in match.grace_tasks.values():
+            self._cancel_task(task)
+        match.grace_tasks.clear()
+
+    @staticmethod
+    def _cancel_task(task: asyncio.Task[None]) -> None:
+        # As tarefas de timeout chegam aqui ao encerrar a partida; cancelar a própria
+        # interromperia o callback de fim de partida que ela ainda vai chamar.
+        if task is not asyncio.current_task():
+            task.cancel()
 
     async def _expire_turn(self, match_id: str, turn: Symbol, seq: int) -> None:
         await asyncio.sleep(self._turn_timeout_seconds)
@@ -268,6 +318,18 @@ class GameEngineService:
             outcome = self._finish(match, winner_id=winner.user_id, reason=EndReason.TIMEOUT)
         await self._on_match_end(outcome)
 
+    async def _expire_grace(self, match_id: str, user_id: str) -> None:
+        await asyncio.sleep(self._reconnect_grace_seconds)
+        async with self._lock:
+            match = self._matches.get(match_id)
+            if match is None or match.is_finished or user_id not in match.grace_tasks:
+                return
+            details = {"match_id": match_id, "user_id": user_id}
+            logger.info("match.reconnect_expired", extra={"details": details})
+            winner = match.opponent_of(user_id)
+            outcome = self._finish(match, winner_id=winner.user_id, reason=EndReason.DISCONNECT)
+        await self._on_match_end(outcome)
+
     def _finish(
         self,
         match: ActiveMatch,
@@ -277,6 +339,7 @@ class GameEngineService:
     ) -> MatchOutcome:
         match.is_finished = True
         self._cancel_turn_timer(match)
+        self._cancel_grace_timers(match)
         for user_id in match.players:
             self._player_match_map.pop(user_id, None)
         self._matches.pop(match.match_id, None)
