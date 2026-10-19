@@ -79,7 +79,9 @@ def test_burst_above_the_limit_is_warned_then_closed(
             code = closed_code(websocket)
 
     output = capsys.readouterr().out
-    actions = [event["details"]["action"] for event in _json_events(output, "ws.rate_limited")]
+    actions = [
+        event["details"]["action"] for event in _json_events(output, "security.rate_limited")
+    ]
     assert [e["payload"]["code"] for e in errors] == ["UNKNOWN_TYPE"] * SMALL_BURST + [
         "RATE_LIMITED"
     ] * WARNINGS_BEFORE_CLOSE
@@ -117,7 +119,7 @@ def test_foreign_origin_is_rejected_in_the_handshake(
     ):
         pass
 
-    rejected = _json_events(capsys.readouterr().out, "security.origin_rejected")
+    rejected = _json_events(capsys.readouterr().out, "security.bad_origin")
     assert len(rejected) == 1
     assert rejected[0]["details"]["origin"] == FOREIGN_ORIGIN
     assert "ip" in rejected[0]["details"]

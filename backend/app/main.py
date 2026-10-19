@@ -98,7 +98,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await users.ensure_indexes()
     audit = await _start_audit(events) if settings.audit_enabled and db_available else None
     db_status = "ok" if db_available else "error"
-    logger.info("server.started", extra={"details": {"version": __version__, "db": db_status}})
+    details = {"version": __version__, "port": settings.server_port, "db": db_status}
+    logger.info("server.started", extra={"details": details})
     try:
         yield
     finally:

@@ -104,7 +104,8 @@ class AuthService:
             user = await self._users.insert(username, password_hash, datetime.now(UTC))
         except DuplicateUsernameError as exc:
             raise UsernameTakenError from exc
-        logger.info("user.registered", extra={"details": {"username": user.username, "ip": ip}})
+        details = {"user_id": user.id, "username": user.username, "ip": ip}
+        logger.info("user.registered", extra={"details": details})
         return user
 
     async def login(self, username: str, password: str, ip: str) -> LoginResult:
@@ -115,15 +116,20 @@ class AuthService:
                 "security.rate_limited", extra={"details": {"ip": ip, "reason": "login"}}
             )
             raise TooManyAttemptsError
-        user = await self._authenticate(username, password)
-        if user is None:
+        user, password_ok = await self._authenticate(username, password)
+        if user is None or not password_ok:
             self._limiter.register_failure(key)
-            details = {"username": attempted_username, "ip": ip}
+            details = {
+                "user_id": user.id if user else None,
+                "username": attempted_username,
+                "ip": ip,
+            }
             logger.warning("user.login_failed", extra={"details": details})
             raise InvalidCredentialsError
         self._limiter.reset(key)
         await self._users.update_last_login(user.id, datetime.now(UTC))
-        logger.info("user.login", extra={"details": {"username": user.username, "ip": ip}})
+        details = {"user_id": user.id, "username": user.username, "ip": ip}
+        logger.info("user.login", extra={"details": details})
         return self._issue_token(user)
 
     async def get_user_from_token(self, token: str) -> User | None:
@@ -133,13 +139,14 @@ class AuthService:
             return None
         return await self._users.find_by_id(claims.user_id)
 
-    async def _authenticate(self, username: str, password: str) -> User | None:
+    async def _authenticate(self, username: str, password: str) -> tuple[User | None, bool]:
+        """Devolve o usuário encontrado (ou None) e se a senha confere."""
         if not (_is_valid_username(username) and _is_valid_password(password)):
-            return None
+            return None, False
         user = await self._users.find_by_username(username)
         password_hash = user.password_hash if user else self._placeholder_hash
         matches = await asyncio.to_thread(security.verify_password, password_hash, password)
-        return user if matches else None
+        return user, matches and user is not None
 
     def _issue_token(self, user: User) -> LoginResult:
         token = security.create_access_token(

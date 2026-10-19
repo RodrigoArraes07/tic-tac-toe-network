@@ -56,6 +56,11 @@ def _match_state(
     )
 
 
+def _log_move_rejected(user_id: str, match_id: str | None, code: str) -> None:
+    details = {"user_id": user_id, "match_id": match_id, "code": code}
+    logger.warning("move.rejected", extra={"details": details})
+
+
 def _result_for(outcome: MatchOutcome, user_id: str) -> MatchResultType:
     if outcome.winner_id is None:
         return MatchResultType.DRAW
@@ -130,6 +135,10 @@ class MatchFinisher:
         duration = (outcome.ended_at - outcome.started_at).total_seconds()
         details = {
             "match_id": outcome.match_id,
+            "x_user_id": outcome.player_x.user_id,
+            "x_username": outcome.player_x.username,
+            "o_user_id": outcome.player_o.user_id,
+            "o_username": outcome.player_o.username,
             "players": [player.username for player in outcome.players],
             "winner": winner,
             "reason": outcome.reason.value,
@@ -167,6 +176,7 @@ class GameHandlers:
         try:
             payload = MovePayload.model_validate(envelope.get("payload", {}))
         except ValidationError:
+            _log_move_rejected(event.user_id, None, "INVALID_MESSAGE")
             await self._send_error(event.user_id, "INVALID_MESSAGE", ref)
             return
         try:
@@ -174,6 +184,7 @@ class GameHandlers:
                 event.user_id, payload.match_id, payload.cell, payload.seq
             )
         except GameError as err:
+            _log_move_rejected(event.user_id, payload.match_id, err.code)
             await self._send_error(event.user_id, err.code, ref)
             if err.code == "STALE_STATE":
                 await self._resend_state(event.user_id, payload.match_id, ref)

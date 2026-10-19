@@ -150,10 +150,14 @@ class GameEngineService:
             self._player_match_map[p1_id] = match_id
             self._player_match_map[p2_id] = match_id
             self._start_turn_timer(match)
-            logger.info(
-                "game_engine.match_started",
-                extra={"details": {"match_id": match_id, "p1": p1_id, "p2": p2_id}},
-            )
+            details = {
+                "match_id": match_id,
+                "x_user_id": p1_id,
+                "x_username": p1_username,
+                "o_user_id": p2_id,
+                "o_username": p2_username,
+            }
+            logger.info("match.started", extra={"details": details})
             return match
 
     def active_match_of(self, user_id: str) -> str | None:
@@ -188,16 +192,20 @@ class GameEngineService:
                     player_symbol=player.symbol,
                 )
             except ValueError as err:
-                logger.warning(
-                    "move.rejected",
-                    extra={"details": {"match_id": match_id, "code": str(err)}},
-                )
                 raise GameError(str(err)) from err
 
             self._cancel_turn_timer(match)
             match.board = new_board
             match.seq += 1
             last_move: dict[str, int | str] = {"symbol": player.symbol.value, "cell": cell}
+            details = {
+                "user_id": user_id,
+                "match_id": match_id,
+                "symbol": player.symbol.value,
+                "cell": cell,
+                "seq": match.seq,
+            }
+            logger.info("move.applied", extra={"details": details})
 
             if result is None:
                 match.current_turn = next_turn
@@ -312,7 +320,7 @@ class GameEngineService:
             loser = match.player_with(turn)
             logger.info(
                 "game_engine.turn_timeout",
-                extra={"details": {"match_id": match_id, "loser": loser.user_id}},
+                extra={"details": {"match_id": match_id, "user_id": loser.user_id}},
             )
             winner = match.opponent_of(loser.user_id)
             outcome = self._finish(match, winner_id=winner.user_id, reason=EndReason.TIMEOUT)

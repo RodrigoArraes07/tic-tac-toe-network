@@ -53,7 +53,7 @@ def _origin_allowed(websocket: WebSocket, settings: Settings) -> bool:
 
 def _log_rate_limited(user_id: str | None, ip: str | None, violations: int, action: str) -> None:
     details = {"user_id": user_id, "ip": ip, "violations": violations, "action": action}
-    logger.warning("ws.rate_limited", extra={"details": details})
+    logger.warning("security.rate_limited", extra={"details": details})
 
 
 def _readable_id(message: Any) -> str | None:
@@ -76,7 +76,7 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     client_port = websocket.client.port if websocket.client else None
     if not _origin_allowed(websocket, settings):
         details = {"ip": client_ip, "origin": websocket.headers.get("origin")}
-        logger.warning("security.origin_rejected", extra={"details": details})
+        logger.warning("security.bad_origin", extra={"details": details})
         await websocket.close(code=POLICY_VIOLATION_CODE)
         return
 
