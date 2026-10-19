@@ -12,6 +12,7 @@ from app.ws.connection_manager import ConnectionManager
 from app.ws.protocol import ForfeitPayload, MatchSyncPayload, MovePayload, WSMessageEnvelope
 
 FREE_STATUS = "FREE"
+IN_MATCH_STATUS = "IN_MATCH"
 ERROR_MESSAGES = {
     "INVALID_MESSAGE": "Mensagem fora do formato esperado.",
     "MATCH_NOT_FOUND": "Partida não encontrada.",
@@ -144,16 +145,19 @@ class GameHandlers:
         engine: GameEngineService,
         finisher: MatchFinisher,
         connections: ConnectionManager,
+        grace_seconds: int,
     ) -> None:
         self._engine = engine
         self._finisher = finisher
         self._connections = connections
+        self._grace_seconds = grace_seconds
 
     def subscribe(self, bus: EventBus) -> None:
         bus.subscribe("cmd.move", self.handle_move)
         bus.subscribe("cmd.forfeit", self.handle_forfeit)
         bus.subscribe("cmd.match_sync", self.handle_match_sync)
         bus.subscribe("user.disconnected", self.handle_user_disconnected)
+        bus.subscribe("user.connected", self.handle_user_connected)
 
     async def handle_move(self, event: Event) -> None:
         if not event.user_id:
@@ -219,9 +223,28 @@ class GameHandlers:
     async def handle_user_disconnected(self, event: Event) -> None:
         if not event.user_id:
             return
-        outcome = await self._engine.handle_player_disconnect(event.user_id)
-        if outcome is not None:
-            await self._finisher.finish(outcome)
+        change = await self._engine.handle_player_disconnect(event.user_id)
+        if change is None:
+            return
+        envelope = WSMessageEnvelope(
+            type="OPPONENT_DISCONNECTED",
+            payload={"match_id": change.match_id, "grace_seconds": self._grace_seconds},
+        )
+        await _send(self._connections, change.opponent_id, envelope)
+
+    async def handle_user_connected(self, event: Event) -> None:
+        if not event.user_id:
+            return
+        change = await self._engine.handle_player_reconnect(event.user_id)
+        if change is None:
+            return
+        # A conexão nova entra como FREE; sem isto, ele poderia ser convidado no meio
+        # da partida.
+        self._connections.update_status(event.user_id, IN_MATCH_STATUS)
+        envelope = WSMessageEnvelope(
+            type="OPPONENT_RECONNECTED", payload={"match_id": change.match_id}
+        )
+        await _send(self._connections, change.opponent_id, envelope)
 
     async def _resend_state(self, user_id: str, match_id: str, ref: str | None) -> None:
         state = self._engine.get_state(match_id)

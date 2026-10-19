@@ -11,6 +11,8 @@ import {
 } from './helpers';
 
 const STATE_ERROR_MESSAGE = 'Ação incompatível com o estado da partida.';
+const TURN_SECONDS = 30;
+const AWAY_MS = 4000;
 
 test('T06: dois usuários se veem online', async ({ browser }) => {
   const [a, b] = await twoPlayersInLobby(browser);
@@ -120,6 +122,28 @@ test('voltar ao lobby depois do fim não mostra erro do servidor', async ({ brow
   for (const player of [a, b]) {
     expect(await player.page.getByText(STATE_ERROR_MESSAGE).count()).toBe(0);
   }
+});
+
+test('reconexão: contador oculto na janela e reiniciado na volta do adversário', async ({
+  browser,
+}) => {
+  const [a, b] = await twoPlayersInLobby(browser);
+  await startMatch(a, b);
+  const matchUrl = a.page.url();
+  const timer = b.page.getByText(new RegExp(`${a.name} tem \\d+s para jogar`));
+  await expect(timer).toBeVisible();
+
+  // A sai da página (o socket fecha) e volta depois de alguns segundos.
+  await a.page.goto('about:blank');
+  await expect(b.page.getByRole('status').filter({ hasText: 'perdeu a conexão' })).toBeVisible();
+  await expect(timer).toBeHidden();
+  await b.page.waitForTimeout(AWAY_MS);
+  await a.page.goto(matchUrl);
+
+  await expect(b.page.getByRole('status').filter({ hasText: 'perdeu a conexão' })).toBeHidden();
+  await expect(timer).toBeVisible();
+  const secondsLeft = Number((await timer.textContent())?.match(/(\d+)s/)?.[1]);
+  expect(secondsLeft).toBeGreaterThanOrEqual(TURN_SECONDS - 2);
 });
 
 test('T11/T10: não dá para jogar fora do turno nem em casa ocupada', async ({ browser }) => {
