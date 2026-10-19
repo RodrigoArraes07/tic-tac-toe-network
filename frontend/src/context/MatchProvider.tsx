@@ -10,6 +10,9 @@ export function MatchProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(matchReducer, initialMatch);
   const navigate = useNavigate();
   const stateRef = useRef(state);
+  // Ao voltar ao lobby, a MatchPage ainda renderiza uma vez com o estado zerado antes
+  // de a navegação terminar e pediria MATCH_SYNC da partida que acabou de sair.
+  const leftMatchIdRef = useRef<string | null>(null);
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
@@ -74,10 +77,12 @@ export function MatchProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const syncMatch = useCallback((matchId: string) => {
+    if (matchId === leftMatchIdRef.current) return;
     gameSocket.send('MATCH_SYNC', { match_id: matchId });
   }, []);
 
   const leaveMatch = useCallback(() => {
+    leftMatchIdRef.current = stateRef.current.matchId;
     dispatch({ type: 'reset' });
     navigate('/lobby');
   }, [navigate]);

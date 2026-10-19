@@ -317,9 +317,10 @@ wss.on('connection', (ws) => {
       armTurnTimer(m);
       return;
     }
-    if (type === 'MATCH_SYNC') return ws.send(env('MATCH_STATE', stateOf(m, me, true), id));
+    // Como no back-end: partida encerrada não aceita mais nada, nem MATCH_SYNC.
     if (m.status !== 'IN_PROGRESS')
       return err('INVALID_STATE', 'Ação incompatível com o estado da partida.', id);
+    if (type === 'MATCH_SYNC') return ws.send(env('MATCH_STATE', stateOf(m, me, true), id));
 
     if (type === 'FORFEIT') return endMatch(m, me === m.x ? m.o : m.x, 'FORFEIT');
     if (type === 'MOVE') {
