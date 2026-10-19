@@ -85,9 +85,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     engine = GameEngineService(
         on_match_end=finisher.finish,
         turn_timeout_seconds=game_engine.TURN_TIMEOUT_SECONDS,
+        reconnect_grace_seconds=settings.reconnect_grace_s,
     )
     app.state.game_engine = engine
-    GameHandlers(engine, finisher, connection_manager).subscribe(event_bus)
+    handlers = GameHandlers(engine, finisher, connection_manager, settings.reconnect_grace_s)
+    handlers.subscribe(event_bus)
     invite_service = InviteService(engine, connection_manager, settings.invite_timeout_s)
     InviteHandlers(invite_service).subscribe(event_bus)
 
@@ -96,7 +98,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await users.ensure_indexes()
     audit = await _start_audit(events) if settings.audit_enabled and db_available else None
     db_status = "ok" if db_available else "error"
-    logger.info("server.started", extra={"details": {"version": __version__, "db": db_status}})
+    details = {"version": __version__, "port": settings.server_port, "db": db_status}
+    logger.info("server.started", extra={"details": details})
     try:
         yield
     finally:

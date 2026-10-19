@@ -10,6 +10,10 @@ import {
   uniqueName,
 } from './helpers';
 
+const STATE_ERROR_MESSAGE = 'Ação incompatível com o estado da partida.';
+const TURN_SECONDS = 30;
+const AWAY_MS = 4000;
+
 test('T06: dois usuários se veem online', async ({ browser }) => {
   const [a, b] = await twoPlayersInLobby(browser);
   await expect(a.page.getByRole('listitem').filter({ hasText: b.name })).toContainText('Livre');
@@ -98,6 +102,48 @@ test('T16: desistência dá a vitória ao adversário', async ({ browser }) => {
   await expect(a.page.getByRole('dialog')).toContainText('Você venceu!');
   await expect(a.page.getByRole('dialog')).toContainText('Seu adversário desistiu.');
   await expect(b.page.getByRole('dialog')).toContainText('Você desistiu da partida.');
+});
+
+test('voltar ao lobby depois do fim não mostra erro do servidor', async ({ browser }) => {
+  const [a, b] = await twoPlayersInLobby(browser);
+  await startMatch(a, b);
+  await b.page.getByRole('button', { name: 'Desistir' }).click();
+  await b.page.getByRole('button', { name: 'Desistir' }).last().click();
+  await expect(a.page.getByRole('dialog')).toContainText('Você venceu!');
+
+  for (const player of [a, b]) {
+    await player.page.getByRole('dialog').getByRole('button', { name: 'Voltar ao lobby' }).click();
+    await expect(player.page).toHaveURL(/\/lobby/);
+  }
+  // Tempo para um MATCH_SYNC indevido ir e voltar. A contagem é pontual: o toast some
+  // em 4,5 s, e uma asserção com nova tentativa acabaria passando depois que ele sumisse.
+  await a.page.waitForTimeout(1000);
+
+  for (const player of [a, b]) {
+    expect(await player.page.getByText(STATE_ERROR_MESSAGE).count()).toBe(0);
+  }
+});
+
+test('reconexão: contador oculto na janela e reiniciado na volta do adversário', async ({
+  browser,
+}) => {
+  const [a, b] = await twoPlayersInLobby(browser);
+  await startMatch(a, b);
+  const matchUrl = a.page.url();
+  const timer = b.page.getByText(new RegExp(`${a.name} tem \\d+s para jogar`));
+  await expect(timer).toBeVisible();
+
+  // A sai da página (o socket fecha) e volta depois de alguns segundos.
+  await a.page.goto('about:blank');
+  await expect(b.page.getByRole('status').filter({ hasText: 'perdeu a conexão' })).toBeVisible();
+  await expect(timer).toBeHidden();
+  await b.page.waitForTimeout(AWAY_MS);
+  await a.page.goto(matchUrl);
+
+  await expect(b.page.getByRole('status').filter({ hasText: 'perdeu a conexão' })).toBeHidden();
+  await expect(timer).toBeVisible();
+  const secondsLeft = Number((await timer.textContent())?.match(/(\d+)s/)?.[1]);
+  expect(secondsLeft).toBeGreaterThanOrEqual(TURN_SECONDS - 2);
 });
 
 test('T11/T10: não dá para jogar fora do turno nem em casa ocupada', async ({ browser }) => {

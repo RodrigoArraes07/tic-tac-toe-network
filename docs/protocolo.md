@@ -2,8 +2,7 @@
 
 Este arquivo é o contrato entre front-end e back-end.
 
-Marcas usadas nas tabelas: `OPC` indica item opcional e `REC` indica item que
-depende da reconexão.
+Marca usada nas tabelas: `OPC` indica item opcional.
 
 ## 7.1 API REST (HTTPS)
 
@@ -89,13 +88,29 @@ frame) com o formato:
 | `MATCH_STARTED` | `{match_id, you_are: X\|O, opponent, board, turn, seq}` | Aos dois jogadores quando o convite é aceito. `opponent` é o username do adversário; `seq` começa em 0. |
 | `MATCH_STATE` | `{match_id, board[9], turn, seq, last_move\|null}`; em resposta a `MATCH_SYNC`, também `you_are: X\|O` e `opponent` (username) | Após cada jogada válida (aos dois, sem `you_are` e `opponent`) e em resposta a MATCH_SYNC (só a quem pediu). |
 | `MATCH_ENDED` | `{match_id, result: WIN\|LOSS\|DRAW, reason: LINE\|DRAW\|FORFEIT\|DISCONNECT\|TIMEOUT, winning_line\|null, board}` | Fim da partida; `result` é personalizado para cada destinatário. |
-| `OPPONENT_DISCONNECTED` | `{match_id, grace_seconds: 30}` | REC Adversário caiu. |
-| `OPPONENT_RECONNECTED` | `{match_id}` | REC Adversário voltou. |
+| `OPPONENT_DISCONNECTED` | `{match_id, grace_seconds}` | O adversário caiu durante a partida; `grace_seconds` é o prazo para ele voltar (`RECONNECT_GRACE_S`, padrão 30). |
+| `OPPONENT_RECONNECTED` | `{match_id}` | O adversário voltou dentro do prazo; a partida continua. |
 | `ERROR` | `{code, message}` (`ref` = id do comando) | Qualquer comando recusado. |
 
 Tempo de turno: cada jogador tem 30 s para jogar. Se o tempo acabar, a partida
 termina com `reason: TIMEOUT` e vitória do adversário, que conta como vitória
 normal no ranking. A desistência voluntária continua com `reason: FORFEIT`.
+
+Reconexão: se a conexão de um jogador cai durante uma partida em andamento, a
+partida não termina na hora.
+
+- O adversário recebe `OPPONENT_DISCONNECTED` e começa a janela de
+  `RECONNECT_GRACE_S` segundos (padrão 30).
+- Se o jogador volta dentro do prazo (nova conexão com `AUTH`, que traz o
+  `active_match_id`, seguida de `MATCH_SYNC`), o adversário recebe
+  `OPPONENT_RECONNECTED` e o jogo continua de onde parou.
+- Se o prazo acaba, a partida termina com `reason: DISCONNECT` e vitória do
+  adversário.
+- Enquanto alguém estiver fora, o tempo de turno fica suspenso. Quando a pessoa
+  volta, o turno de quem tem a vez recomeça com o prazo cheio.
+- Durante a janela, o jogador que ficou pode jogar na sua vez ou desistir.
+- Abrir o mesmo usuário em outra aba (fechamento `4001`) não abre janela: a
+  partida segue na conexão nova.
 
 ## 7.5 Códigos de erro e de fechamento
 

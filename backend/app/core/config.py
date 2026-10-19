@@ -16,9 +16,12 @@ class Settings(BaseSettings):
     mongo_uri: str
     mongo_db: str
     log_level: str = "INFO"
+    # Porta passada ao Uvicorn (compose.yaml e Dockerfile usam 8000); só para o log.
+    server_port: int = 8000
     jwt_secret: SecretStr = Field(min_length=JWT_SECRET_MIN_LENGTH)
     jwt_expires_minutes: int
     invite_timeout_s: int = Field(gt=0)
+    reconnect_grace_s: int = Field(gt=0)
     audit_enabled: bool = True
     ws_rate_per_second: float = Field(default=10, gt=0)
     ws_rate_burst: int = Field(default=20, gt=0)

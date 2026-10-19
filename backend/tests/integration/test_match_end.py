@@ -5,6 +5,7 @@ import pytest
 from fastapi.testclient import TestClient
 from pymongo.collection import Collection
 
+from app.core.config import Settings
 from app.main import create_app
 from app.services import game_engine
 from tests.integration.ws_helpers import (
@@ -19,6 +20,7 @@ from tests.integration.ws_helpers import (
 )
 
 SHORT_TURN_SECONDS = 0.3
+SHORT_GRACE_SECONDS = 1
 WIN_MOVES = [0, 3, 1, 4, 2]
 DRAW_MOVES = [0, 1, 2, 4, 3, 5, 7, 6, 8]
 WIN_STATS = {"wins": 1, "losses": 0, "draws": 0, "points": 3}
@@ -39,6 +41,13 @@ def client() -> Iterator[TestClient]:
 def short_turn_client(monkeypatch: pytest.MonkeyPatch) -> Iterator[TestClient]:
     monkeypatch.setattr(game_engine, "TURN_TIMEOUT_SECONDS", SHORT_TURN_SECONDS)
     with TestClient(create_app()) as test_client:
+        yield test_client
+
+
+@pytest.fixture
+def short_grace_client() -> Iterator[TestClient]:
+    settings = Settings(reconnect_grace_s=SHORT_GRACE_SECONDS)
+    with TestClient(create_app(settings)) as test_client:
         yield test_client
 
 
@@ -149,23 +158,26 @@ def test_forfeit_gives_the_win_to_the_opponent(
     assert (stored["winner_id"], stored["reason"]) == (x.user_id, "FORFEIT")
 
 
-def test_disconnect_gives_the_win_to_the_player_who_stayed(
-    client: TestClient,
-    players: tuple[Player, Player],
+def test_disconnect_without_return_gives_the_win_to_the_player_who_stayed(
+    short_grace_client: TestClient,
+    new_username: UsernameFactory,
     users_collection: MongoCollection,
     matches_collection: MongoCollection,
     created_matches: list[str],
 ) -> None:
-    x, o = players
-    with client.websocket_connect("/ws") as ws_x:
+    x = create_player(short_grace_client, new_username())
+    o = create_player(short_grace_client, new_username())
+    with short_grace_client.websocket_connect("/ws") as ws_x:
         authenticate(ws_x, x)
-        with client.websocket_connect("/ws") as ws_o:
+        with short_grace_client.websocket_connect("/ws") as ws_o:
             authenticate(ws_o, o)
             match_id = start_match(ws_x, ws_o, o, created_matches)
 
+        away = receive(ws_x, "OPPONENT_DISCONNECTED", match_id=match_id)["payload"]
         ended_x = receive(ws_x, "MATCH_ENDED", match_id=match_id)["payload"]
         receive_presence_free(ws_x, x.username)
 
+    assert away["grace_seconds"] == SHORT_GRACE_SECONDS
     assert ended_x["result"] == "WIN"
     assert ended_x["reason"] == "DISCONNECT"
     assert _stats(users_collection, x) == WIN_STATS

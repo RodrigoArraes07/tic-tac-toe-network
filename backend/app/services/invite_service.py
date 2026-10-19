@@ -32,6 +32,18 @@ class PendingInvite:
         return user_id in (self.from_user_id, self.to_user_id)
 
 
+def _log_invite(event_type: str, invite: PendingInvite, actor_id: str | None) -> None:
+    details = {
+        "user_id": actor_id,
+        "match_id": invite.match_id,
+        "from_user_id": invite.from_user_id,
+        "from_username": invite.from_username,
+        "to_user_id": invite.to_user_id,
+        "to_username": invite.to_username,
+    }
+    logger.info(event_type, extra={"details": details})
+
+
 class InviteService:
     def __init__(
         self, engine: GameEngineService, connections: ConnectionManager, timeout_s: int
@@ -69,6 +81,7 @@ class InviteService:
         )
         invite.timer = asyncio.create_task(self._expire(match_id))
         self.pending_invites[match_id] = invite
+        _log_invite("invite.sent", invite, actor_id=from_user_id)
 
         await self._send(
             from_user_id,
@@ -107,8 +120,10 @@ class InviteService:
         self._take(match_id)
 
         if accept:
+            _log_invite("invite.accepted", invite, actor_id=user_id)
             await self._start_match(invite)
         else:
+            _log_invite("invite.rejected", invite, actor_id=user_id)
             await self._send_result(invite.from_user_id, match_id, "REJECTED")
 
     async def cancel_invite(self, user_id: str, match_id: str, msg_id: str | None) -> None:
@@ -120,6 +135,7 @@ class InviteService:
             await self.send_error(user_id, "NOT_A_PLAYER", msg_id)
             return
         self._take(match_id)
+        _log_invite("invite.cancelled", invite, actor_id=user_id)
         await self._send_result(invite.from_user_id, match_id, "CANCELLED", msg_id)
         await self._send_result(invite.to_user_id, match_id, "CANCELLED")
 
@@ -129,6 +145,7 @@ class InviteService:
             invite = self._take(match_id)
             if invite is None:
                 continue
+            _log_invite("invite.cancelled", invite, actor_id=user_id)
             other_id = invite.to_user_id if user_id == invite.from_user_id else invite.from_user_id
             await self._send_result(other_id, match_id, "CANCELLED")
 
@@ -166,7 +183,7 @@ class InviteService:
         invite = self._take(match_id)
         if invite is None:
             return
-        logger.info("invite.expired", extra={"details": {"match_id": match_id}})
+        _log_invite("invite.expired", invite, actor_id=None)
         await self._send_result(invite.from_user_id, match_id, "EXPIRED")
         await self._send_result(invite.to_user_id, match_id, "EXPIRED")
 

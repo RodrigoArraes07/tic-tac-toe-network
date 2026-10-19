@@ -177,7 +177,8 @@ const winnerOf = (b) => {
 function endMatch(m, winnerName, reason, line = null) {
   if (m.status !== 'IN_PROGRESS') return;
   m.status = 'FINISHED';
-  clearTimeout(m.grace);
+  m.away.forEach((timer) => clearTimeout(timer));
+  m.away.clear();
   clearTimeout(m.turnTimer);
   Object.assign(m, { winner: winnerName, reason, endedAt: new Date().toISOString() });
   finished.push(m);
@@ -250,8 +251,11 @@ wss.on('connection', (ws) => {
       if (old && old !== ws) old.close(4001);
       sockets.set(me, ws);
       const active = activeMatchOf(me);
-      if (active) {
-        clearTimeout(active.grace);
+      // Só quem estava na janela de reconexão; segunda aba (4001) não abre janela.
+      if (active?.away.has(me)) {
+        clearTimeout(active.away.get(me));
+        active.away.delete(me);
+        if (active.away.size === 0) armTurnTimer(active);
         sendTo(me === active.x ? active.o : active.x, 'OPPONENT_RECONNECTED', {
           match_id: active.id,
         });
@@ -282,6 +286,7 @@ wss.on('connection', (ws) => {
         turn: 'X',
         seq: 0,
         last: null,
+        away: new Map(), // username -> timer da janela de reconexão
       };
       matches.set(m.id, m);
       m.timer = setTimeout(
@@ -317,9 +322,10 @@ wss.on('connection', (ws) => {
       armTurnTimer(m);
       return;
     }
-    if (type === 'MATCH_SYNC') return ws.send(env('MATCH_STATE', stateOf(m, me, true), id));
+    // Como no back-end: partida encerrada não aceita mais nada, nem MATCH_SYNC.
     if (m.status !== 'IN_PROGRESS')
       return err('INVALID_STATE', 'Ação incompatível com o estado da partida.', id);
+    if (type === 'MATCH_SYNC') return ws.send(env('MATCH_STATE', stateOf(m, me, true), id));
 
     if (type === 'FORFEIT') return endMatch(m, me === m.x ? m.o : m.x, 'FORFEIT');
     if (type === 'MOVE') {
@@ -346,7 +352,7 @@ wss.on('connection', (ws) => {
         return endMatch(m, null, 'DRAW');
       }
       m.turn = sym === 'X' ? 'O' : 'X';
-      armTurnTimer(m);
+      if (m.away.size === 0) armTurnTimer(m);
       for (const n of [m.x, m.o]) sendTo(n, 'MATCH_STATE', stateOf(m, n), n === me ? id : null);
     }
   });
@@ -359,10 +365,15 @@ wss.on('connection', (ws) => {
     const p = pendingOf(me);
     if (p) closeInvite(p, 'CANCELLED');
     const a = activeMatchOf(me);
-    if (a) {
+    if (a && !a.away.has(me)) {
       const other = a.x === me ? a.o : a.x;
+      // Como no back-end: o turno fica suspenso enquanto alguém está fora.
+      clearTimeout(a.turnTimer);
       sendTo(other, 'OPPONENT_DISCONNECTED', { match_id: a.id, grace_seconds: GRACE_S });
-      a.grace = setTimeout(() => endMatch(a, other, 'DISCONNECT'), GRACE_S * 1000);
+      a.away.set(
+        me,
+        setTimeout(() => endMatch(a, other, 'DISCONNECT'), GRACE_S * 1000),
+      );
     }
   });
 });

@@ -10,6 +10,9 @@ export function MatchProvider({ children }: { children: ReactNode }) {
   const [state, dispatch] = useReducer(matchReducer, initialMatch);
   const navigate = useNavigate();
   const stateRef = useRef(state);
+  // Ao voltar ao lobby, a MatchPage ainda renderiza uma vez com o estado zerado antes
+  // de a navegação terminar e pediria MATCH_SYNC da partida que acabou de sair.
+  const leftMatchIdRef = useRef<string | null>(null);
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
@@ -36,7 +39,9 @@ export function MatchProvider({ children }: { children: ReactNode }) {
       gameSocket.subscribe('OPPONENT_DISCONNECTED', (m) =>
         dispatch({ type: 'opponent_away', until: Date.now() + m.payload.grace_seconds * 1000 }),
       ),
-      gameSocket.subscribe('OPPONENT_RECONNECTED', () => dispatch({ type: 'opponent_back' })),
+      gameSocket.subscribe('OPPONENT_RECONNECTED', () =>
+        dispatch({ type: 'opponent_back', at: Date.now() }),
+      ),
       gameSocket.subscribe('ERROR', (m) => {
         const { pending, matchId } = stateRef.current;
         if (pending && m.ref === pending.id) dispatch({ type: 'clear_pending', id: pending.id });
@@ -74,10 +79,12 @@ export function MatchProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const syncMatch = useCallback((matchId: string) => {
+    if (matchId === leftMatchIdRef.current) return;
     gameSocket.send('MATCH_SYNC', { match_id: matchId });
   }, []);
 
   const leaveMatch = useCallback(() => {
+    leftMatchIdRef.current = stateRef.current.matchId;
     dispatch({ type: 'reset' });
     navigate('/lobby');
   }, [navigate]);
