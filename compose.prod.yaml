@@ -1,0 +1,62 @@
+# Override de produção. Uso:
+#   docker compose -f compose.yaml -f compose.prod.yaml up -d --build
+# ou, com COMPOSE_FILE=compose.yaml:compose.prod.yaml no .env, só docker compose.
+
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "3"
+
+services:
+  mongo:
+    restart: unless-stopped
+    logging: *logging
+    ports: !reset []
+
+  backend:
+    restart: unless-stopped
+    logging: *logging
+    ports: !reset []
+    volumes: !reset []
+    environment:
+      # Só a variável de recarga do desenvolvimento sai; o .env continua via env_file.
+      WATCHFILES_FORCE_POLLING: !reset null
+    # Um worker só: presença, convites e partidas vivem em memória.
+    command: >
+      uvicorn app.main:create_app --factory --host 0.0.0.0 --port 8000
+      --proxy-headers --forwarded-allow-ips 172.28.0.10
+
+  nginx:
+    profiles: !reset []
+    restart: unless-stopped
+    logging: *logging
+    environment:
+      DOMAIN: ${DOMAIN:?defina DOMAIN no .env}
+    entrypoint: ["/bin/sh", "/deploy/nginx-entrypoint.sh"]
+    volumes: !override
+      - ./infra/nginx/prod.conf.template:/etc/nginx/templates/default.conf.template:ro
+      - ./infra/deploy/nginx-entrypoint.sh:/deploy/nginx-entrypoint.sh:ro
+      - letsencrypt:/etc/letsencrypt:ro
+      - certbot-www:/var/www/certbot:ro
+
+  certbot:
+    image: certbot/certbot:v5.8.0
+    restart: unless-stopped
+    logging: *logging
+    volumes:
+      - letsencrypt:/etc/letsencrypt
+      - certbot-www:/var/www/certbot
+    # O deploy-hook só roda quando um certificado é de fato renovado; o Nginx
+    # observa esse arquivo e recarrega (infra/deploy/nginx-entrypoint.sh).
+    entrypoint: >
+      /bin/sh -c 'trap exit TERM;
+      while :; do
+      certbot renew --quiet --webroot -w /var/www/certbot
+      --deploy-hook "touch /etc/letsencrypt/renewed";
+      sleep 12h & wait $${!};
+      done'
+
+volumes:
+  letsencrypt:
+  certbot-www:
