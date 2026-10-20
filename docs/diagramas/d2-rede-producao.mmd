@@ -1,0 +1,14 @@
+flowchart TB
+    U["Navegador"]
+    LE["Let's Encrypt"]
+    subgraph VM["VM no Azure, 172.28.0.0/24"]
+        NG["nginx :443 e :80"]
+        BE["backend :8000"]
+        MG[("mongo :27017")]
+        CB["certbot"]
+    end
+    U -->|"HTTPS e WSS"| NG
+    NG --> BE
+    BE --> MG
+    NG -.-|"certificado"| CB
+    CB -->|"renovação"| LE

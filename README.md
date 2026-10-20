@@ -4,12 +4,22 @@ Jogo da velha para 2 jogadores em rede, em arquitetura cliente-servidor com
 comunicação em tempo real por WebSocket. Projeto da disciplina Redes de
 Computadores 2.
 
+Aplicação em produção: https://dominio-de-producao.example
+
+Documentação completa: [docs/documentacao.md](docs/documentacao.md), também
+entregue em PDF na plataforma da disciplina.
+
 ## Stack
 
-- Back-end: Python 3.14 + FastAPI
-- Front-end: React + TypeScript + Vite
-- Banco de dados: MongoDB
+- Back-end: Python 3.14, FastAPI 0.143, Uvicorn 0.54, Pydantic 2.15, PyMongo
+  4.18 (API assíncrona), argon2-cffi 25.1 e PyJWT 2.15
+- Front-end: React 19, TypeScript 6.0, Vite 8 e React Router 7
+- Banco de dados: MongoDB 8.0
+- Proxy e TLS: Nginx (`stable-alpine`), certbot 5.8 em produção e mkcert no
+  ambiente local
 - Ambiente: Docker Compose
+- Testes e qualidade: pytest 9.1, Playwright 1.64, ruff 0.16, ESLint 10 e
+  Prettier 3.9
 
 ## Estrutura
 
@@ -17,6 +27,11 @@ Computadores 2.
 - `frontend/`: cliente web
 - `infra/`: arquivos de infraestrutura
 - `docs/`: documentação do projeto
+  - `documentacao.md`: documentação completa
+  - `protocolo.md`: contrato entre cliente e servidor
+  - `diagramas/`: fontes Mermaid (`.mmd`) e imagens dos diagramas
+  - `capturas/`: capturas do Wireshark e prints
+  - `imagens/`: imagens usadas na documentação
 
 ## Pré-requisitos
 
@@ -99,6 +114,9 @@ pytest
 O ambiente virtual só precisa ser criado e ter as dependências instaladas uma
 vez. Nas próximas, basta ativá-lo.
 
+Para rodar cada nível separado: `pytest tests/unit` (não usa o banco) e
+`pytest tests/integration` (usa o MongoDB do `docker compose`).
+
 ### Front-end
 
 ```
@@ -107,6 +125,19 @@ npm run lint
 npm run format:check
 npm run build
 ```
+
+### Ponta a ponta (E2E)
+
+```
+cd frontend
+npx playwright install chromium
+npm run e2e
+```
+
+O `npx playwright install chromium` só é necessário na primeira vez. O
+Playwright sobe o servidor falso (`npm run mock`, porta 8000) e o Vite (porta
+5173). Por isso, o back-end do Docker precisa estar parado
+(`docker compose stop backend`); senão a porta 8000 é reaproveitada.
 
 ## HTTPS local
 
@@ -165,6 +196,13 @@ Acesse https://localhost. Para parar, incluindo o Nginx:
 docker compose --profile https down
 ```
 
+## Capturas do Wireshark
+
+As capturas ficam em `docs/capturas/`: `capturas-locais-sem-tls.pcapng`,
+`captura-tls-producao.pcapng` e os prints usados na documentação. Para abrir um
+`.pcapng`, use o Wireshark (Arquivo > Abrir). Os filtros de exibição de cada
+captura estão na seção 9.4 da documentação.
+
 ## Comandos do Docker
 
 | Comando | Quando usar |
@@ -218,8 +256,11 @@ docker compose up -d --build
 
 ## Documentação
 
-- [Protocolo de comunicação](docs/protocolo.md)
-- [Deploy em produção](infra/deploy/README.md)
+- [Documentação completa](docs/documentacao.md), também entregue em PDF na
+  plataforma da disciplina
+- [Protocolo de comunicação](docs/protocolo.md): contrato entre cliente e
+  servidor
+- [Deploy em produção](infra/deploy/README.md): guia de implantação
 - [Como contribuir](CONTRIBUTING.md)
 
 ## Como contribuir

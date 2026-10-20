@@ -1,0 +1,17 @@
+sequenceDiagram
+    participant A as Cliente A
+    participant S as Servidor
+    participant B as Cliente B
+    A--xS: conexão cai
+    S->>B: OPPONENT_DISCONNECTED (grace_seconds)
+    Note over S: turno suspenso por até 30 s
+    alt A volta dentro do prazo
+        A->>S: AUTH (token)
+        S-->>A: AUTH_OK (active_match_id)
+        S->>B: OPPONENT_RECONNECTED
+        Note over S: turno reiniciado
+        A->>S: MATCH_SYNC (match_id)
+        S-->>A: MATCH_STATE (you_are, opponent)
+    else prazo esgotado
+        S->>B: MATCH_ENDED (WIN, DISCONNECT)
+    end

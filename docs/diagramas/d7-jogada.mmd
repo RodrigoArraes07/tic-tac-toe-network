@@ -1,0 +1,15 @@
+sequenceDiagram
+    participant A as Cliente A
+    participant G as Gateway
+    participant E as Engine
+    participant B as Cliente B
+    A->>G: MOVE (match_id, cell, seq)
+    G->>E: cmd.move pelo event bus
+    Note over E: trava global
+    E->>E: valida partida, seq, turno e casa
+    alt jogada válida
+        G-->>A: MATCH_STATE (seq + 1, ref)
+        G-->>B: MATCH_STATE (seq + 1, ref)
+    else jogada recusada
+        G-->>A: ERROR (code, ref)
+    end

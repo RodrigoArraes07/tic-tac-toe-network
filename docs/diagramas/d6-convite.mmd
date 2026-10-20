@@ -1,0 +1,22 @@
+sequenceDiagram
+    participant A as Cliente A
+    participant S as Servidor
+    participant B as Cliente B
+    A->>S: INVITE_SEND (to_username)
+    S-->>A: INVITE_SENT (match_id, expires_in)
+    S->>B: INVITE_RECEIVED (match_id, from_username)
+    alt B aceita
+        B->>S: INVITE_RESPOND (accept true)
+        S-->>A: MATCH_STARTED (you_are X)
+        S-->>B: MATCH_STARTED (you_are O)
+    else B recusa
+        B->>S: INVITE_RESPOND (accept false)
+        S-->>A: INVITE_RESULT (REJECTED)
+    else A cancela
+        A->>S: INVITE_CANCEL
+        S-->>A: INVITE_RESULT (CANCELLED)
+        S-->>B: INVITE_RESULT (CANCELLED)
+    else 30 s sem resposta
+        S-->>A: INVITE_RESULT (EXPIRED)
+        S-->>B: INVITE_RESULT (EXPIRED)
+    end
