@@ -1,0 +1,17 @@
+sequenceDiagram
+    participant C as Cliente
+    participant S as Servidor
+    participant DB as MongoDB
+    participant O as Outros clientes
+    C->>S: POST /api/auth/register
+    S->>DB: insere usuário (hash Argon2id)
+    S-->>C: 201 (id, username)
+    C->>S: POST /api/auth/login
+    S->>DB: busca usuário
+    S-->>C: 200 (access_token)
+    C->>S: GET /ws (Upgrade)
+    S-->>C: 101 Switching Protocols
+    C->>S: AUTH (token)
+    S->>O: PRESENCE_UPDATE (FREE)
+    S-->>C: AUTH_OK (user, active_match_id)
+    S-->>C: PRESENCE_SNAPSHOT (users)

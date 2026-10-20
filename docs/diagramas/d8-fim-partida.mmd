@@ -1,0 +1,19 @@
+sequenceDiagram
+    participant X as Cliente X
+    participant S as Servidor
+    participant O as Cliente O
+    participant DB as MongoDB
+    alt linha ou empate
+        X->>S: MOVE (jogada final)
+        S-->>X: MATCH_STATE
+        S-->>O: MATCH_STATE
+    else desistência
+        O->>S: FORFEIT
+    else tempo do turno
+        Note over S: 30 s sem jogada
+    end
+    S-->>X: MATCH_ENDED (result WIN)
+    S-->>O: MATCH_ENDED (result LOSS)
+    S->>DB: $inc nos stats dos dois
+    S->>DB: insere resultado em matches
+    Note over X,O: PRESENCE_UPDATE (FREE) para todos os conectados

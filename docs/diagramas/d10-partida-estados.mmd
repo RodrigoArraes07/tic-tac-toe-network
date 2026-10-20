@@ -1,0 +1,11 @@
+stateDiagram-v2
+    [*] --> PENDING: INVITE_SEND
+    PENDING --> IN_PROGRESS: aceite
+    PENDING --> REJECTED: recusa
+    PENDING --> CANCELLED: cancelamento ou queda
+    PENDING --> EXPIRED: 30 s
+    IN_PROGRESS --> FINISHED: LINE, DRAW, FORFEIT, DISCONNECT ou TIMEOUT
+    REJECTED --> [*]
+    CANCELLED --> [*]
+    EXPIRED --> [*]
+    FINISHED --> [*]

@@ -1,0 +1,14 @@
+stateDiagram-v2
+    state "Handshake (Origin)" as Handshake
+    state "Aguardando AUTH (5 s)" as AguardandoAuth
+    state "Autenticada" as Autenticada
+    state "Recusada" as Recusada
+    state "Fechada" as Fechada
+    [*] --> Handshake: GET /ws
+    Handshake --> Recusada: Origin fora da lista, 1008
+    Handshake --> AguardandoAuth: 101
+    AguardandoAuth --> Autenticada: AUTH válido
+    AguardandoAuth --> Fechada: 4401 ou 1009
+    Autenticada --> Fechada: 1009, 4400, 4001 ou cliente
+    Recusada --> [*]
+    Fechada --> [*]

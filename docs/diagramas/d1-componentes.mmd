@@ -1,0 +1,22 @@
+flowchart TB
+    A["Cliente A"]
+    B["Cliente B"]
+    N["Nginx: TLS e proxy"]
+    subgraph SRV["Servidor FastAPI"]
+        R["API REST"]
+        G["Gateway WebSocket"]
+        E["Event bus"]
+        S["Serviços"]
+        L["Auditoria"]
+    end
+    M[("MongoDB")]
+    A -->|"HTTPS e WSS"| N
+    B -->|"HTTPS e WSS"| N
+    N -->|"/api"| R
+    N -->|"/ws"| G
+    G -->|"comandos"| E
+    E --> S
+    S -->|"mensagens"| G
+    R --> M
+    S --> M
+    L --> M
