@@ -1,0 +1,14 @@
+flowchart TB
+    API["api: REST"]
+    WS["ws: gateway"]
+    BUS["Event bus"]
+    SVC["services"]
+    DOM["domain: regras"]
+    REP["repositories"]
+    DB[("MongoDB")]
+    API --> SVC
+    WS --> BUS
+    BUS --> SVC
+    SVC --> DOM
+    SVC --> REP
+    REP --> DB

@@ -14,6 +14,8 @@ infra/certs/
 playwright-report/
 test-results/
 
+docs/documentacao.pdf
+
 .DS_Store
 Thumbs.db
 .idea/

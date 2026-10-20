@@ -1,0 +1,15 @@
+stateDiagram-v2
+    state "Desconectado (idle)" as Desconectado
+    state "Autenticando (connecting)" as Autenticando
+    state "Lobby (open)" as Lobby
+    state "Convite pendente" as Convite
+    state "Em partida (playing)" as EmPartida
+    state "Resultado (ended)" as Resultado
+    [*] --> Desconectado
+    Desconectado --> Autenticando: login
+    Autenticando --> Lobby: AUTH_OK
+    Lobby --> Convite: convite enviado ou recebido
+    Convite --> Lobby: INVITE_RESULT
+    Convite --> EmPartida: MATCH_STARTED
+    EmPartida --> Resultado: MATCH_ENDED
+    Resultado --> Lobby: voltar ao lobby

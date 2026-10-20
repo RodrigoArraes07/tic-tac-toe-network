@@ -1,0 +1,30 @@
+erDiagram
+    direction LR
+    USERS ||--o{ MATCHES : "player_x_id, player_o_id"
+    USERS ||--o{ EVENTS : "user_id"
+    MATCHES ||--o{ EVENTS : "match_id"
+    USERS {
+        ObjectId _id PK
+        string username UK
+        string password_hash
+        date created_at
+        date last_login_at
+        object stats
+    }
+    MATCHES {
+        string _id PK
+        string player_x_id FK
+        string player_o_id FK
+        string winner_id
+        string reason
+        date ended_at
+    }
+    EVENTS {
+        ObjectId _id PK
+        date ts
+        string level
+        string type
+        string user_id
+        string match_id
+        object details
+    }

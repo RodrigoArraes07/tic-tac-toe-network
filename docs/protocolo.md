@@ -2,8 +2,6 @@
 
 Este arquivo é o contrato entre front-end e back-end.
 
-Marca usada nas tabelas: `OPC` indica item opcional.
-
 ## 7.1 API REST (HTTPS)
 
 | Método | Rota | Auth | Corpo / resposta |
@@ -14,7 +12,6 @@ Marca usada nas tabelas: `OPC` indica item opcional.
 | GET | `/api/ranking?limit=20` | Bearer | Lista ordenada `[{position, username, points, wins, draws, losses}]`. |
 | GET | `/api/matches/history` | Bearer | `200 [{id, player_x_id, player_o_id, winner_id\|null, reason, ended_at}]` — as 20 últimas partidas encerradas do usuário, da mais recente para a mais antiga; ids em texto, `reason` como em `MATCH_ENDED`, `ended_at` em ISO-8601. |
 | GET | `/api/health` | — | `{status, db}` — usado pelo Docker e nos testes. |
-| GET | `/api/admin/stats` | Bearer (admin) | OPC Online, partidas ativas, erros recentes (painel). |
 
 Regras de validação: username com 3–20 caracteres `[a-zA-Z0-9_]`, comparado em
 minúsculas; senha com 8–72 caracteres.
@@ -86,7 +83,7 @@ frame) com o formato:
 | `INVITE_RECEIVED` | `{match_id, from_username, expires_in}` | Ao convidado. |
 | `INVITE_RESULT` | `{match_id, status: REJECTED\|EXPIRED\|CANCELLED}` | Convite encerrado sem partida. |
 | `MATCH_STARTED` | `{match_id, you_are: X\|O, opponent, board, turn, seq}` | Aos dois jogadores quando o convite é aceito. `opponent` é o username do adversário; `seq` começa em 0. |
-| `MATCH_STATE` | `{match_id, board[9], turn, seq, last_move\|null}`; em resposta a `MATCH_SYNC`, também `you_are: X\|O` e `opponent` (username) | Após cada jogada válida (aos dois, sem `you_are` e `opponent`) e em resposta a MATCH_SYNC (só a quem pediu). |
+| `MATCH_STATE` | `{match_id, board[9], turn, seq, last_move\|null}`; em resposta a `MATCH_SYNC`, também `you_are: X\|O` e `opponent` (username) | Após cada jogada válida (aos dois, sem `you_are` e `opponent`), em resposta a MATCH_SYNC (só a quem pediu) e depois de um `STALE_STATE` (só a quem mandou o `MOVE` recusado). |
 | `MATCH_ENDED` | `{match_id, result: WIN\|LOSS\|DRAW, reason: LINE\|DRAW\|FORFEIT\|DISCONNECT\|TIMEOUT, winning_line\|null, board}` | Fim da partida; `result` é personalizado para cada destinatário. |
 | `OPPONENT_DISCONNECTED` | `{match_id, grace_seconds}` | O adversário caiu durante a partida; `grace_seconds` é o prazo para ele voltar (`RECONNECT_GRACE_S`, padrão 30). |
 | `OPPONENT_RECONNECTED` | `{match_id}` | O adversário voltou dentro do prazo; a partida continua. |
@@ -129,11 +126,12 @@ partida não termina na hora.
 | `CELL_OCCUPIED` | Casa já marcada |
 | `STALE_STATE` | seq desatualizado |
 | `RATE_LIMITED` | Mensagens demais por segundo; a mensagem é descartada |
-| `INTERNAL` | Erro inesperado (detalhe só no log) |
+| `INTERNAL` | Reservado; não é enviado pelo WebSocket. Falhas em handlers geram só o log `error.internal`, e "Erro interno." aparece apenas na resposta REST 500 |
 
 | Close code (WS) | Significado |
 | --- | --- |
 | `1000` | Fechamento normal (logout) |
+| `1008` | `Origin` não permitida no handshake; a conexão nem é aceita e o navegador vê HTTP 403 |
 | `1009` | Mensagem grande demais |
 | `4001` | Sessão substituída por nova conexão |
 | `4400` | Violação repetida do protocolo (ex.: limite de mensagens excedido depois de 3 avisos) |

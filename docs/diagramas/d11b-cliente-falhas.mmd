@@ -1,0 +1,13 @@
+stateDiagram-v2
+    state "Conectado (open)" as Conectado
+    state "Reconectando (reconnecting)" as Reconectando
+    state "Autenticando (connecting)" as Autenticando
+    state "Sessão substituída (replaced)" as Substituida
+    state "Token inválido (closed)" as TokenInvalido
+    Conectado --> Reconectando: queda
+    Reconectando --> Autenticando: nova tentativa
+    Autenticando --> Conectado: AUTH_OK
+    Autenticando --> TokenInvalido: 4401
+    Conectado --> Substituida: 4001
+    Substituida --> Autenticando: usar esta aba
+    TokenInvalido --> [*]: volta ao login
