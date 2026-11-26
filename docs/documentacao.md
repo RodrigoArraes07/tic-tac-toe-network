@@ -1,38 +1,3 @@
----
-puppeteer:
-  format: "A4"
-  printBackground: true
-  margin:
-    top: "18mm"
-    bottom: "18mm"
-    left: "16mm"
-    right: "16mm"
----
-
-<style>
-pre, pre[class*="language-"], pre code, code[class*="language-"] { white-space: pre-wrap !important; word-break: break-word !important; overflow-wrap: anywhere !important; }
-table { width: 100%; table-layout: auto; }
-td code { word-break: break-all; }
-img { max-width: 100%; }
-html body { font-size: 14px !important; line-height: 1.5 !important; }
-html body table { font-size: 12.5px !important; }
-html body pre, html body code, html body pre code { font-size: 12px !important; }
-</style>
-
-<div style="height: 250mm; display: flex; flex-direction: column; justify-content: space-between; text-align: center; font-family: 'Times New Roman', Times, serif;">
-<div>
-<p style="font-size: 12pt; margin-top: 18px; line-height: 1.6;">LUIZ EDUARDO DA SILVA MOURA<br>RODRIGO ARRAES COSTA ALBUQUERQUE<br>WILLIAM MENDONÇA OLIVEIRA</p>
-</div>
-<div>
-<p style="font-weight: bold; font-size: 13pt; line-height: 1.5;">JOGO DA VELHA MULTIPLAYER<br>DOCUMENTAÇÃO TÉCNICA</p>
-</div>
-<div>
-<p style="font-size: 12pt; line-height: 1.5;">BRAZIL<br>2026</p>
-</div>
-</div>
-
-<div style="page-break-after: always;"></div>
-
 # Jogo da Velha Multiplayer
 
 **Documentação técnica do projeto**
@@ -47,28 +12,26 @@ A aplicação foi implantada em produção em uma VM na nuvem (`<domínio de pro
 
 ## Sumário
 
-- [1. Introdução e escopo](#introducao)
-- [2. Requisitos](#requisitos)
-- [3. Arquitetura e componentes de rede](#arquitetura)
-- [4. Escolha das tecnologias e bibliotecas](#tecnologias)
-- [5. Comunicação: sockets, IPC e protocolo](#comunicacao)
-- [6. Sequência da comunicação e roteamento de mensagens](#sequencia)
-- [7. Modelo de dados](#modelo-de-dados)
-- [8. Segurança](#seguranca)
-- [9. Monitoramento e depuração](#monitoramento)
-- [10. Implantação](#implantacao)
-- [11. Testes](#testes)
-- [12. Decisões e qualidade](#decisoes-e-qualidade)
-- [13. Referências](#referencias)
+- [1. Introdução e escopo](#1-introdução-e-escopo)
+- [2. Requisitos](#2-requisitos)
+- [3. Arquitetura e componentes de rede](#3-arquitetura-e-componentes-de-rede)
+- [4. Escolha das tecnologias e bibliotecas](#4-escolha-das-tecnologias-e-bibliotecas)
+- [5. Comunicação: sockets, IPC e protocolo](#5-comunicação-sockets-ipc-e-protocolo)
+- [6. Sequência da comunicação e roteamento de mensagens](#6-sequência-da-comunicação-e-roteamento-de-mensagens)
+- [7. Modelo de dados](#7-modelo-de-dados)
+- [8. Segurança](#8-segurança)
+- [9. Monitoramento e depuração](#9-monitoramento-e-depuração)
+- [10. Implantação](#10-implantação)
+- [11. Testes](#11-testes)
+- [12. Decisões e qualidade](#12-decisões-e-qualidade)
+- [13. Referências](#13-referências)
 
 Documentos técnicos complementares, citados ao longo do texto:
 
 - `docs/protocolo.md`: contrato completo entre cliente e servidor (rotas REST, catálogo de mensagens WebSocket, códigos de erro e de fechamento).
 - `infra/deploy/README.md`: procedimento de implantação em produção (firewall, Docker, certificado, atualização e backup).
 
-<div style="page-break-after: always;"></div>
-
-## 1. Introdução e escopo {#introducao}
+## 1. Introdução e escopo
 
 O objetivo do projeto é uma aplicação de jogo para dois jogadores conectados ao mesmo tempo por uma rede, com estado de jogo consistente para ambos. Escolhemos o jogo da velha porque as regras são curtas e conhecidas. Assim, o esforço do projeto ficou concentrado nos temas que o projeto se propôs a explorar: comunicação em rede, protocolo, segurança, arquitetura orientada a eventos e observabilidade.
 
@@ -87,9 +50,9 @@ O que entregamos, em linhas gerais:
 
 Ficaram fora do escopo o jogador bot e o painel de administração (requisitos opcionais 11 e 13), como detalhado na seção 2.
 
-## 2. Requisitos {#requisitos}
+## 2. Requisitos
 
-### 2.1 Requisitos básicos {#requisitos-basicos}
+### 2.1 Requisitos básicos
 
 Todos os requisitos básicos foram implementados. A tabela indica como cada um foi atendido e em que seção do documento está o detalhe.
 
@@ -105,7 +68,7 @@ Todos os requisitos básicos foram implementados. A tabela indica como cada um f
 | 8 | Sair do jogo concedendo a vitória | `FORFEIT`, ou queda sem retorno em 30 s | 6 |
 | 9 | Monitorar eventos do servidor e, de preferência, persistir no banco | Log JSON de cada evento, gravado também na coleção `events` | 9 |
 
-### 2.2 Requisitos opcionais {#requisitos-opcionais}
+### 2.2 Requisitos opcionais
 
 | # | Requisito | Situação | Observação |
 | --- | --- | --- | --- |
@@ -115,7 +78,7 @@ Todos os requisitos básicos foram implementados. A tabela indica como cada um f
 | 13 | Painel do servidor | Não feito | Os dados necessários já existem na coleção `events`; ver próximos passos na seção 12 |
 | 14 | Implantação na nuvem | Feito | VM Ubuntu no Azure, Docker Compose com override de produção, TLS 1.3 com Let's Encrypt |
 
-### 2.3 Requisitos não funcionais {#requisitos-nao-funcionais}
+### 2.3 Requisitos não funcionais
 
 Os requisitos não funcionais foram definidos na fase de projeto, cada um com um critério verificável.
 
@@ -132,21 +95,17 @@ Os requisitos não funcionais foram definidos na fase de projeto, cada um com um
 | RNF09 | Portabilidade | Ambiente completo sobe com `docker compose up` em Windows, Linux ou macOS | Atendido: desenvolvimento em Windows, produção em Ubuntu |
 | RNF10 | Manutenibilidade | Regras do jogo em módulo puro, com testes unitários | Regras em `backend/app/domain/`, com testes; cobertura não medida |
 
-## 3. Arquitetura e componentes de rede {#arquitetura}
+## 3. Arquitetura e componentes de rede
 
-### 3.1 Visão geral {#visao-geral}
+### 3.1 Visão geral
 
 A arquitetura segue o modelo cliente-servidor clássico: clientes, cada um com seu socket, ligados pela rede a um servidor de aplicação que contém o barramento de eventos e o banco de dados. Acrescentamos um Nginx à frente do servidor para terminar o TLS e servir o front-end.
 
-<div style="page-break-inside: avoid">
-
 **Diagrama D1: componentes do sistema**
 
-<img src="diagramas/d1-componentes.png" alt="Diagrama D1: componentes do sistema" style="display:block; margin:0 auto; width:55%;">
+<p align="center"><img src="diagramas/d1-componentes.png" alt="Diagrama D1: componentes do sistema" width="55%"></p>
 
-</div>
-
-### 3.2 Responsabilidade de cada componente {#componentes}
+### 3.2 Responsabilidade de cada componente
 
 | Componente | Responsabilidade |
 | --- | --- |
@@ -159,7 +118,7 @@ A arquitetura segue o modelo cliente-servidor clássico: clientes, cada um com s
 | Auditoria | Grava os eventos de log na coleção `events` por uma fila assíncrona |
 | MongoDB | Persiste `users`, `matches` (resultados) e `events` |
 
-### 3.3 Servidor autoritativo e estado em memória {#estado-em-memoria}
+### 3.3 Servidor autoritativo e estado em memória
 
 O servidor é autoritativo: o cliente nunca altera o tabuleiro por conta própria. Esse modelo resolve consistência e trapaça ao mesmo tempo: os dois clientes substituem o estado local pelo que o servidor envia, e um cliente adulterado não consegue jogar fora da vez nem em casa ocupada.
 
@@ -167,35 +126,27 @@ O estado de tempo real fica em memória, em três estruturas: `ConnectionManager
 
 A consequência dessa escolha é que o servidor roda com um único processo Uvicorn (um worker): dois processos teriam duas cópias independentes de presença e partidas. Para a escala do projeto, um processo é suficiente, e o limite está registrado na seção 12.
 
-### 3.4 Event bus e concorrência {#event-bus}
+### 3.4 Event bus e concorrência
 
 O gateway não chama os serviços diretamente. Cada comando recebido vira um evento `cmd.<tipo>`, publicado no `EventBus`. O `publish` cria uma tarefa assíncrona para cada handler inscrito. Com isso, o gateway volta a ler o socket sem esperar o processamento, e uma exceção em um handler é registrada como `error.internal` sem interromper os demais. Se não houver nenhum handler para o tipo recebido, o gateway responde `UNKNOWN_TYPE`.
 
 Como os handlers rodam em tarefas concorrentes, o `GameEngineService` serializa o acesso às partidas com uma única trava (`asyncio.Lock`), escolhida pela simplicidade. Uma partida de jogo da velha gera poucas mensagens, e dentro da trava só há operações em memória: a gravação do resultado no banco acontece depois que ela é liberada. O `seq` (seção 5.5) recusa a segunda de duas jogadas simultâneas. Uma trava por partida, que permitiria paralelismo entre partidas, está entre os próximos passos da seção 12.
 
-### 3.5 Camadas do servidor {#camadas}
+### 3.5 Camadas do servidor
 
 O módulo `domain/` contém as regras puras do jogo e não importa FastAPI, PyMongo nem nada de rede. Somente `repositories/` acessa o banco. A configuração vem apenas de variáveis de ambiente, lidas em `core/config.py`.
 
-<div style="page-break-inside: avoid">
-
 **Diagrama D3: camadas internas do servidor**
 
-<img src="diagramas/d3-camadas.png" alt="Diagrama D3: camadas internas do servidor" style="display:block; margin:0 auto; width:50%;">
-
-</div>
+<p align="center"><img src="diagramas/d3-camadas.png" alt="Diagrama D3: camadas internas do servidor" width="50%"></p>
 
 A auditoria não aparece no diagrama porque não depende do event bus: ela recebe os registros do módulo `logging` do Python, inclusive os gerados pela API REST (seção 9.2).
 
-### 3.6 Rede e portas {#rede-e-portas}
-
-<div style="page-break-inside: avoid">
+### 3.6 Rede e portas
 
 **Diagrama D2: rede e implantação em produção**
 
-<img src="diagramas/d2-rede-producao.png" alt="Diagrama D2: rede e implantação em produção" style="display:block; margin:0 auto; width:50%;">
-
-</div>
+<p align="center"><img src="diagramas/d2-rede-producao.png" alt="Diagrama D2: rede e implantação em produção" width="50%"></p>
 
 Em produção, só as portas 22, 80 e 443 são liberadas, e o backend e o MongoDB não publicam portas. O backend só aceita `X-Forwarded-For` vindo do IP fixo do Nginx, de modo que o IP registrado no log é o do cliente real.
 
@@ -206,9 +157,9 @@ Em produção, só as portas 22, 80 e 443 são liberadas, e o backend e o MongoD
 | 8000 | Backend no host | Só na rede interna |
 | 27017 | MongoDB em `127.0.0.1` | Só na rede interna |
 
-## 4. Escolha das tecnologias e bibliotecas {#tecnologias}
+## 4. Escolha das tecnologias e bibliotecas
 
-### 4.1 Por que Python no servidor {#python}
+### 4.1 Por que Python no servidor
 
 Avaliamos também .NET (C#) e Java. Escolhemos Python 3.14 pelos motivos abaixo.
 
@@ -222,7 +173,7 @@ Avaliamos também .NET (C#) e Java. Escolhemos Python 3.14 pelos motivos abaixo.
 
 As alternativas avaliadas têm recursos equivalentes: `ASP.NET` Core com SignalR e Spring com suporte a WebSocket. O SignalR, porém, acrescenta um protocolo próprio sobre o WebSocket, com o mesmo efeito do `Socket.IO` discutido em 4.3. Para um protocolo que queríamos projetar e mostrar no Wireshark, o WebSocket nativo do FastAPI atende melhor.
 
-### 4.2 Bibliotecas e ferramentas {#bibliotecas}
+### 4.2 Bibliotecas e ferramentas
 
 | Camada | Escolha | Versão | Motivo |
 | --- | --- | --- | --- |
@@ -241,7 +192,7 @@ As alternativas avaliadas têm recursos equivalentes: `ASP.NET` Core com SignalR
 | Testes | pytest, pytest-asyncio, Playwright | 9.1, 1.4, 1.64 | Integração com MongoDB real e ponta a ponta com dois navegadores |
 | Qualidade | ruff, ESLint, Prettier | 0.16, 10, 3.9 | Lint e formatação sem avisos nos dois lados |
 
-### 4.3 WebSocket nativo, `Socket.IO` ou MQTT {#websocket-socketio-mqtt}
+### 4.3 WebSocket nativo, `Socket.IO` ou MQTT
 
 | Opção | Vantagem | Por que não usamos |
 | --- | --- | --- |
@@ -251,37 +202,29 @@ As alternativas avaliadas têm recursos equivalentes: `ASP.NET` Core com SignalR
 
 Sem a reconexão de uma biblioteca pronta, o cliente tenta de novo com espera de 1, 2, 4 s, até 30 s, exceto após 4001 (sessão em outra aba) e 4401 (token inválido), em que reconectar não resolveria.
 
-## 5. Comunicação: sockets, IPC e protocolo {#comunicacao}
+## 5. Comunicação: sockets, IPC e protocolo
 
-### 5.1 Sockets e WebSocket {#sockets}
+### 5.1 Sockets e WebSocket
 
 Um dos objetivos do projeto é entender o uso de sockets no contexto do modelo OSI e comunicar dados entre cliente-servidor e cliente-cliente. Um navegador não abre um socket TCP diretamente; a forma padrão de obter um canal TCP persistente e bidirecional em uma aplicação web é o WebSocket. A conexão começa como uma requisição HTTP `GET /ws` com o cabeçalho `Upgrade: websocket`. O servidor responde `101 Switching Protocols` e, a partir daí, a mesma conexão TCP transporta frames nos dois sentidos até o fechamento.
 
 Escolhemos TCP, e não UDP, porque um jogo por turnos não pode perder nem reordenar jogadas, e a latência de um jogo da velha não justifica reimplementar essas garantias na aplicação.
 
-<div style="page-break-inside: avoid">
-
-<img src="capturas/local-01-conexao-websocket.png" alt="Ciclo de vida de uma conexão WebSocket" style="display:block; margin:0 auto; width:75%;">
+<p align="center"><img src="capturas/local-01-conexao-websocket.png" alt="Ciclo de vida de uma conexão WebSocket" width="75%"></p>
 
 *Figura 1. Conexão WebSocket filtrada por `tcp.port == 51077`: handshake TCP, upgrade, mensagens, ping/pong a cada 20 s e fechamento.*
 
-</div>
-
 Nas capturas locais, o front-end foi servido pelo Vite: o navegador se conecta ao Vite na porta 5173, e o Vite abre uma segunda conexão até o backend na porta 8000. A porta 51077 da Figura 1 é a dessa segunda conexão. Em produção, o Nginx ocupa o lugar do Vite, e o trecho entre o navegador e o servidor passa a ser cifrado (seção 8).
 
-<div style="page-break-inside: avoid">
-
-<img src="capturas/local-02-upgrade-websocket.png" alt="Requisição de upgrade para WebSocket" style="display:block; margin:0 auto; width:70%;">
+<p align="center"><img src="capturas/local-02-upgrade-websocket.png" alt="Requisição de upgrade para WebSocket" width="70%"></p>
 
 *Figura 2. Requisição `GET /ws` com os cabeçalhos de upgrade, que recebe a resposta `101 Switching Protocols` no frame 595.*
 
-</div>
-
-### 5.2 Comunicação cliente-cliente {#cliente-cliente}
+### 5.2 Comunicação cliente-cliente
 
 Nesta arquitetura, a comunicação entre clientes é mediada pelo servidor: uma jogada de A chega a B porque o servidor a recebe, valida e encaminha. Não usamos conexão direta entre navegadores (WebRTC, por exemplo), que exigiria atravessar NAT e tiraria do servidor o controle das regras e da segurança.
 
-### 5.3 Mapeamento no modelo OSI {#modelo-osi}
+### 5.3 Mapeamento no modelo OSI
 
 | Camada OSI | No projeto | Onde ver no Wireshark |
 | --- | --- | --- |
@@ -292,7 +235,7 @@ Nesta arquitetura, a comunicação entre clientes é mediada pelo servidor: uma 
 | 3. Rede | IPv6 em loopback; IPv4 até a VM | `ip.addr` ou `ipv6.addr` |
 | 2 e 1. Enlace e física | Loopback local; Wi-Fi ou Ethernet pela rede | Cabeçalho do frame |
 
-### 5.4 Comunicação entre processos (IPC) {#ipc}
+### 5.4 Comunicação entre processos (IPC)
 
 | Canal | Processos | Transporte | Formato |
 | --- | --- | --- | --- |
@@ -303,7 +246,7 @@ Nesta arquitetura, a comunicação entre clientes é mediada pelo servidor: uma 
 
 Separamos REST e WebSocket por natureza da operação. Cadastro, login, ranking e histórico são pedidos pontuais com resposta. Presença, convites e jogadas precisam que o servidor envie mensagens sem ter sido consultado, o que só um canal persistente oferece.
 
-### 5.5 Protocolo de mensagens {#protocolo}
+### 5.5 Protocolo de mensagens
 
 **Envelope.** Toda mensagem WebSocket, nos dois sentidos, tem o mesmo formato:
 
@@ -356,128 +299,91 @@ O frame 4717 (16:30:20,830004) entrega ao jogador O o `MATCH_STATE`, com o `ref`
              "last_move": {"symbol": "X", "cell": 0}}}
 ```
 
-<div style="page-break-inside: avoid">
-
-<img src="capturas/local-04-move.png" alt="Frame do comando MOVE" style="display:block; margin:0 auto; width:75%;">
+<p align="center"><img src="capturas/local-04-move.png" alt="Frame do comando MOVE" width="75%"></p>
 
 *Figura 3. Frame WebSocket com o comando `MOVE` em texto claro, enviado pelo cliente com máscara (`Mask: True`) e compressão `permessage-deflate`.*
-
-</div>
 
 A máscara, exigida pela RFC 6455 em todo frame do cliente, não é criptografia: a chave viaja no próprio frame. O Wireshark remove a máscara e descomprime o conteúdo, por isso, sem TLS, o JSON fica legível para qualquer um na rede.
 
 **Erros e fechamento.** Comandos recusados geram `ERROR` com um de 13 códigos, e a conexão continua aberta; violações graves fecham a conexão com os códigos da seção 8.5. O contrato completo está no repositório, em `docs/protocolo.md`.
 
-## 6. Sequência da comunicação e roteamento de mensagens {#sequencia}
+## 6. Sequência da comunicação e roteamento de mensagens
 
 Os diagramas omitem o envelope (`id`, `ref`, `ts`) e mostram só os campos do `payload` relevantes para cada passo.
 
-### 6.1 Cadastro, login e entrada no lobby {#fluxo-login}
+### 6.1 Cadastro, login e entrada no lobby
 
 O JWT do login vale 60 minutos, e o `AUTH` precisa chegar em até 5 s. O `active_match_id` do `AUTH_OK` permite retomar uma partida depois de recarregar a página ou de uma queda (seção 6.5).
 
-<div style="page-break-inside: avoid">
-
 **Diagrama D5: cadastro, login e entrada no lobby**
 
-<img src="diagramas/d5-login-presenca.png" alt="Diagrama D5: cadastro, login e entrada no lobby" style="display:block; margin:0 auto; width:90%;">
-
-</div>
+<p align="center"><img src="diagramas/d5-login-presenca.png" alt="Diagrama D5: cadastro, login e entrada no lobby" width="90%"></p>
 
 Se a mesma conta abrir uma segunda conexão, a anterior é fechada com 4001, sem `OFFLINE` para os outros usuários.
 
-### 6.2 Convites {#fluxo-convite}
+### 6.2 Convites
 
 Antes de criar o convite, o servidor confere três condições e recusa com `ERROR` se alguma falhar: o convidado não pode ser o próprio usuário (`SELF_INVITE`), precisa estar online (`USER_OFFLINE`) e nenhum dos dois pode estar em partida ou em outro convite pendente (`USER_BUSY`). O convidante joga com X e começa.
 
-<div style="page-break-inside: avoid">
-
 **Diagrama D6: convite e suas alternativas**
 
-<img src="diagramas/d6-convite.png" alt="Diagrama D6: convite e suas alternativas" style="display:block; margin:0 auto; width:75%;">
-
-</div>
+<p align="center"><img src="diagramas/d6-convite.png" alt="Diagrama D6: convite e suas alternativas" width="75%"></p>
 
 Além dos casos do diagrama, a queda de um dos dois encerra o convite com `CANCELLED` para quem ficou. Toda saída do estado pendente passa por um único método, que remove o convite e cancela o temporizador; assim, um aceite no mesmo instante da expiração não produz partida e `EXPIRED` ao mesmo tempo.
 
-### 6.3 Jogada {#fluxo-jogada}
+### 6.3 Jogada
 
 O motor valida a jogada dentro da trava global descrita na seção 3.4, nesta ordem: formato do payload (`INVALID_MESSAGE`), partida existente e em andamento (`MATCH_NOT_FOUND` ou `INVALID_STATE`), jogador da partida (`NOT_A_PLAYER`), `seq` atual (`STALE_STATE`) e, no módulo `domain/`, casa válida (`INVALID_CELL`), vez do jogador (`NOT_YOUR_TURN`) e casa livre (`CELL_OCCUPIED`).
 
-<div style="page-break-inside: avoid">
-
 **Diagrama D7: processamento de uma jogada**
 
-<img src="diagramas/d7-jogada.png" alt="Diagrama D7: processamento de uma jogada" style="display:block; margin:0 auto; width:85%;">
-
-</div>
+<p align="center"><img src="diagramas/d7-jogada.png" alt="Diagrama D7: processamento de uma jogada" width="85%"></p>
 
 Uma jogada válida também reinicia o temporizador de 30 s do turno. No caso de `STALE_STATE`, o servidor envia ainda o `MATCH_STATE` atual a esse jogador, para que o cliente corrija a tela sem precisar pedir.
 
-### 6.4 Fim de partida {#fluxo-fim}
+### 6.4 Fim de partida
 
 Os cinco tipos de fim (`LINE`, `DRAW`, `FORFEIT`, `TIMEOUT` e `DISCONNECT`) passam por um único componente, o `MatchFinisher`, para terem os mesmos efeitos na mesma ordem.
 
-<div style="page-break-inside: avoid">
-
 **Diagrama D8: fim de partida**
 
-<img src="diagramas/d8-fim-partida.png" alt="Diagrama D8: fim de partida" style="display:block; margin:0 auto; width:85%;">
-
-</div>
+<p align="center"><img src="diagramas/d8-fim-partida.png" alt="Diagrama D8: fim de partida" width="85%"></p>
 
 Quando a partida termina por jogada, o `MATCH_STATE` dessa jogada chega antes do `MATCH_ENDED`. Uma falha ao gravar o ranking ou o resultado é registrada como `error.internal` e não impede que os jogadores recebam o resultado e voltem ao lobby. No `TIMEOUT`, perde quem estava com a vez; no `FORFEIT` e no `DISCONNECT`, vence o adversário de quem saiu.
 
-### 6.5 Queda e reconexão {#fluxo-reconexao}
+### 6.5 Queda e reconexão
 
 Quando a conexão de um jogador cai durante uma partida, o servidor abre uma janela de 30 s (`RECONNECT_GRACE_S`) e suspende o temporizador do turno. Suspendemos o turno porque, sem isso, um jogador que caísse na própria vez poderia perder por `TIMEOUT` enquanto ainda tinha direito de voltar.
 
-<div style="page-break-inside: avoid">
-
 **Diagrama D9: queda e reconexão**
 
-<img src="diagramas/d9-reconexao.png" alt="Diagrama D9: queda e reconexão" style="display:block; margin:0 auto; width:85%;">
-
-</div>
+<p align="center"><img src="diagramas/d9-reconexao.png" alt="Diagrama D9: queda e reconexão" width="85%"></p>
 
 Na volta, o turno recomeça com 30 s completos, e a resposta ao `MATCH_SYNC` inclui o símbolo do jogador e o nome do adversário. O mesmo caminho atende quem recarrega a página. A troca de aba (4001) não abre janela de reconexão.
 
-### 6.6 Estados da partida {#estados-partida}
+### 6.6 Estados da partida
 
 Os nomes dos estados vêm do enum `MatchStatus`. Em memória, o estado não é um campo gravado: `PENDING` é um convite em `InviteService` e `IN_PROGRESS` é uma entrada no `GameEngineService`. Só o estado `FINISHED` chega ao banco, em `matches` (seção 7.4).
 
-<div style="page-break-inside: avoid">
-
 **Diagrama D10: ciclo de vida da partida**
 
-<img src="diagramas/d10-partida-estados.png" alt="Diagrama D10: ciclo de vida da partida" style="display:block; margin:0 auto; width:55%;">
+<p align="center"><img src="diagramas/d10-partida-estados.png" alt="Diagrama D10: ciclo de vida da partida" width="55%"></p>
 
-</div>
-
-### 6.7 Estados do cliente {#estados-cliente}
+### 6.7 Estados do cliente
 
 O cliente combina o estado da conexão (`idle`, `connecting`, `open`, `reconnecting`, `replaced`, `closed`) e o da partida (`idle`, `playing`, `ended`); os diagramas usam esses nomes entre parênteses.
 
-<div style="display: flex; gap: 12px; align-items: flex-start; page-break-inside: avoid">
-<div style="width: 48%;">
-
 **Diagrama D11a: estados do cliente, fluxo normal**
 
-<img src="diagramas/d11a-cliente-fluxo.png" alt="Diagrama D11a: estados do cliente, fluxo normal" style="display:block; margin:0 auto; width:100%;">
-
-</div>
-<div style="width: 48%;">
+<p align="center"><img src="diagramas/d11a-cliente-fluxo.png" alt="Diagrama D11a: estados do cliente, fluxo normal" width="100%"></p>
 
 **Diagrama D11b: estados do cliente, falhas de conexão**
 
-<img src="diagramas/d11b-cliente-falhas.png" alt="Diagrama D11b: estados do cliente, falhas de conexão" style="display:block; margin:0 auto; width:100%;">
-
-</div>
-</div>
+<p align="center"><img src="diagramas/d11b-cliente-falhas.png" alt="Diagrama D11b: estados do cliente, falhas de conexão" width="100%"></p>
 
 No D11b, "Conectado" representa qualquer estado com a conexão aberta: lobby, convite pendente ou partida. Se o `AUTH_OK` trouxer uma partida ativa, o cliente volta direto para ela. Os códigos 4001 e 4401 interrompem as tentativas, pelos motivos da seção 4.3.
 
-### 6.8 Roteamento de mensagens {#roteamento}
+### 6.8 Roteamento de mensagens
 
 Os destinatários de cada mensagem saem das estruturas em memória do servidor (conexões por `user_id` e jogadores por `match_id`), nunca do conteúdo enviado pelo cliente. O único comando que cita outro usuário é o `INVITE_SEND`, verificado como na seção 6.2, e um comando sobre partida alheia é recusado com `NOT_A_PLAYER`.
 
@@ -485,17 +391,13 @@ Os destinatários de cada mensagem saem das estruturas em memória do servidor (
 
 Esse roteamento por partida permite várias partidas simultâneas. Como cada partida é uma entrada independente indexada por `match_id`, o número de partidas simultâneas é limitado apenas pela memória do servidor.
 
-## 7. Modelo de dados {#modelo-de-dados}
+## 7. Modelo de dados
 
-### 7.1 Coleções {#colecoes}
-
-<div style="page-break-inside: avoid">
+### 7.1 Coleções
 
 **Diagrama D4: coleções e campos**
 
-<img src="diagramas/d4-dados.png" alt="Diagrama D4: coleções e campos" style="display:block; margin:0 auto; width:90%;">
-
-</div>
+<p align="center"><img src="diagramas/d4-dados.png" alt="Diagrama D4: coleções e campos" width="90%"></p>
 
 | Coleção | Conteúdo | Quem grava |
 | --- | --- | --- |
@@ -505,7 +407,7 @@ Esse roteamento por partida permite várias partidas simultâneas. Como cada par
 
 As ligações entre as coleções são feitas pelos ids em texto. O MongoDB não verifica essas referências; a consistência é responsabilidade do código, como mostrado em 7.3.
 
-### 7.2 Índices {#indices}
+### 7.2 Índices
 
 | Coleção | Índice | Motivo |
 | --- | --- | --- |
@@ -516,7 +418,7 @@ As ligações entre as coleções são feitas pelos ids em texto. O MongoDB não
 
 Os índices são criados na inicialização do servidor, se o banco estiver acessível.
 
-### 7.3 Regras de pontuação e consistência {#pontuacao}
+### 7.3 Regras de pontuação e consistência
 
 | Resultado | Pontos | Campos incrementados |
 | --- | --- | --- |
@@ -530,13 +432,13 @@ As estatísticas são atualizadas com `$inc`, uma operação atômica do MongoDB
 
 O backend acessa o banco com um usuário próprio da aplicação, criado por `infra/mongo/init-app-user.js` na primeira subida, com papel `readWrite` apenas no banco do jogo. As credenciais vêm de variáveis de ambiente e não aparecem no código.
 
-### 7.4 Decisão: `matches` guarda só o resultado {#decisao-matches}
+### 7.4 Decisão: `matches` guarda só o resultado
 
 O planejamento inicial previa uma coleção `matches` com o estado de cada partida desde o convite, atualizado a cada jogada com `$push`. Optamos por gravar apenas o resultado de cada partida encerrada: o estado vivo muda a cada poucos segundos, é consultado a cada jogada e fica em memória, e o ranking e o histórico precisam só do resultado. Os convites e as jogadas continuam registrados na coleção `events` (`invite.*`, `move.applied`), com `user_id` e `match_id`. Em troca, um reinício do servidor encerra as partidas em andamento sem registrar resultado, e não é possível reconstruir uma partida jogada a jogada a partir de `matches`; essas limitações estão na seção 12.
 
-## 8. Segurança {#seguranca}
+## 8. Segurança
 
-### 8.1 Ameaças e mitigações {#ameacas}
+### 8.1 Ameaças e mitigações
 
 | Ameaça | Mitigação |
 | --- | --- |
@@ -552,8 +454,7 @@ O planejamento inicial previa uma coleção `matches` com o estado de cada parti
 | Banco e VM expostos | MongoDB sem porta pública e com usuário próprio; na VM, só 22, 80 e 443 |
 | Informação exposta pelo servidor web | `server_tokens off`, `X-Content-Type-Options: nosniff` e `X-Frame-Options: DENY` |
 
-
-### 8.2 Funções de hash utilizadas {#funcoes-hash}
+### 8.2 Funções de hash utilizadas
 
 As funções da família SHA-2 produzem 224, 256, 384 ou 512 bits. Usamos três mecanismos com funções de hash, cada um com um papel:
 
@@ -565,71 +466,47 @@ As funções da família SHA-2 produzem 224, 256, 384 ou 512 bits. Usamos três 
 
 Um hash rápido como o SHA-256 não serve para guardar senhas justamente por ser rápido. Uma GPU calcula bilhões de SHA-256 por segundo, o que permite testar dicionários inteiros contra um banco vazado. O Argon2id foi projetado para ser lento e exigir memória, e o sal aleatório impede que duas contas com a mesma senha tenham o mesmo hash.
 
-### 8.3 Evidências: sem TLS e com TLS {#evidencias-tls}
+### 8.3 Evidências: sem TLS e com TLS
 
 As Figuras 4 e 5 vêm da captura local, sem TLS, e mostram o que um observador na mesma rede veria.
 
-<div style="page-break-inside: avoid">
-
-<img src="capturas/local-03-auth-token.png" alt="Token JWT legível na mensagem AUTH" style="display:block; margin:0 auto; width:75%;">
+<p align="center"><img src="capturas/local-03-auth-token.png" alt="Token JWT legível na mensagem AUTH" width="75%"></p>
 
 *Figura 4. Mensagem `AUTH` sem TLS: o token JWT aparece em texto claro no payload (frame 601).*
 
-</div>
-
 Com esse token, qualquer pessoa na rede poderia abrir o próprio WebSocket e se passar pelo usuário até o token expirar.
 
-<div style="page-break-inside: avoid">
-
-<img src="capturas/local-05-senha-login.png" alt="Senha legível no POST de login" style="display:block; margin:0 auto; width:75%;">
+<p align="center"><img src="capturas/local-05-senha-login.png" alt="Senha legível no POST de login" width="75%"></p>
 
 *Figura 5. `POST /api/auth/login` sem TLS: usuário e senha legíveis no corpo JSON.*
 
-</div>
-
 As Figuras 6 a 9 vêm da captura de produção, feita entre um navegador e a VM no Azure.
 
-<div style="page-break-inside: avoid">
-
-<img src="capturas/tls-01-client-hello.png" alt="Client Hello com SNI e cifras oferecidas" style="display:block; margin:0 auto; width:75%;">
+<p align="center"><img src="capturas/tls-01-client-hello.png" alt="Client Hello com SNI e cifras oferecidas" width="75%"></p>
 
 *Figura 6. Client Hello: o SNI com o domínio e as 16 suítes de cifra oferecidas pelo navegador.*
 
-</div>
-
 O SNI mostra a um observador qual site foi acessado, mas nada do conteúdo: nenhuma rota, mensagem ou credencial.
 
-<div style="page-break-inside: avoid">
-
-<img src="capturas/tls-02-server-hello.png" alt="Server Hello com TLS 1.3 e a suíte escolhida" style="display:block; margin:0 auto; width:75%;">
+<p align="center"><img src="capturas/tls-02-server-hello.png" alt="Server Hello com TLS 1.3 e a suíte escolhida" width="75%"></p>
 
 *Figura 7. Server Hello: suíte `TLS_AES_128_GCM_SHA256` escolhida e TLS 1.3 na extensão `supported_versions`.*
 
-</div>
-
 O campo `Version` mostra TLS 1.2 (0x0303) por compatibilidade com equipamentos intermediários antigos; a versão real está na extensão `supported_versions`: TLS 1.3 (0x0304).
 
-<div style="page-break-inside: avoid">
-
-<img src="capturas/tls-03-application-data.png" alt="Somente Application Data cifrado na porta 443" style="display:block; margin:0 auto; width:75%;">
+<p align="center"><img src="capturas/tls-03-application-data.png" alt="Somente Application Data cifrado na porta 443" width="75%"></p>
 
 *Figura 8. Depois do handshake, a porta 443 só transporta registros `Application Data` cifrados.*
 
-</div>
-
 Requisições REST, upgrade do WebSocket, `AUTH`, jogadas e respostas trafegam dentro desses registros.
 
-<div style="page-break-inside: avoid">
-
-<img src="capturas/tls-04-busca-senha.png" alt="Busca pela senha na captura de produção sem resultado" style="display:block; margin:0 auto; width:75%;">
+<p align="center"><img src="capturas/tls-04-busca-senha.png" alt="Busca pela senha na captura de produção sem resultado" width="75%"></p>
 
 *Figura 9. Busca pela senha de teste (`<senha de teste>`) nos bytes dos 131 pacotes da captura de produção: nenhum resultado.*
 
-</div>
-
 A Figura 9 é a evidência do teste T24 e do requisito RNF01: a mesma senha que aparece no corpo do `POST` da captura local (Figura 5) não é encontrada na captura de produção.
 
-### 8.4 Simulação de ataques {#simulacao-ataques}
+### 8.4 Simulação de ataques
 
 Testes de penetração completos ficaram fora do escopo. Simulamos os abusos mais comuns com testes automatizados, que também confirmam que o servidor continua respondendo depois de cada um.
 
@@ -646,19 +523,13 @@ Testes de penetração completos ficaram fora do escopo. Simulamos os abusos mai
 
 Esses casos estão nos testes `test_ws_protection.py`, `test_ws.py`, `test_auth.py` e `test_security.py`, em `backend/tests/`. A demonstração de escuta é a comparação da seção 8.3 (Figuras 4 e 5 contra 8 e 9).
 
-### 8.5 Estados da conexão WebSocket no servidor {#estados-conexao}
+### 8.5 Estados da conexão WebSocket no servidor
 
 O D12 resume os caminhos de uma conexão WebSocket no servidor, e a tabela abaixo dele mostra os códigos de fechamento.
 
-<div style="page-break-inside: avoid">
-
 **Diagrama D12: estados da conexão WebSocket no servidor**
 
-<img src="diagramas/d12-conexao-ws.png" alt="Diagrama D12: estados da conexão WebSocket no servidor" style="display:block; margin:0 auto; width:45%;">
-
-</div>
-
-<div style="page-break-inside: avoid">
+<p align="center"><img src="diagramas/d12-conexao-ws.png" alt="Diagrama D12: estados da conexão WebSocket no servidor" width="45%"></p>
 
 | Código | Situação | Ação do cliente |
 | --- | --- | --- |
@@ -668,13 +539,11 @@ O D12 resume os caminhos de uma conexão WebSocket no servidor, e a tabela abaix
 | 4400 | Excesso de mensagens após 3 avisos `RATE_LIMITED` | Reconectar |
 | 4401 | `AUTH` ausente em 5 s, primeira mensagem diferente de `AUTH` ou token inválido | Voltar à tela de login |
 
-</div>
-
 A conexão também termina quando o próprio cliente a fecha, por exemplo com 1001 ao fechar a aba (Figura 10).
 
-## 9. Monitoramento e depuração {#monitoramento}
+## 9. Monitoramento e depuração
 
-### 9.1 Logs estruturados {#logs}
+### 9.1 Logs estruturados
 
 O servidor escreve um evento por linha, em JSON, na saída padrão. Em desenvolvimento e em produção, os logs são lidos com:
 
@@ -701,7 +570,7 @@ O JSON permite filtrar por campo e gravar no banco sem conversão. Os eventos re
 
 Os eventos levam `user_id` e `match_id` quando se aplicam, e o `user.disconnected` registra IP, porta, código de fechamento e duração, o que permite cruzar o log com a captura (seção 9.5).
 
-### 9.2 Auditoria na coleção `events` {#auditoria}
+### 9.2 Auditoria na coleção `events`
 
 Cada evento também é gravado na coleção `events`, o que atende à parte desejável do requisito 9. Um handler do `logging` remove as chaves sensíveis (`password`, `password_hash`, `token`, `access_token`, `authorization`, `secret` e `cookie`), sobe `user_id` e `match_id` para o nível de cima e coloca o documento em uma fila `asyncio.Queue` de até 1000 itens; uma tarefa separada grava os documentos no MongoDB. A fila evita que uma lentidão do banco atrase as jogadas. Com a fila cheia, o evento é descartado sem erro, e a auditoria pode ser desligada com `AUDIT_ENABLED=false`.
 
@@ -716,7 +585,7 @@ mongosh -u "$MONGO_APP_USER" -p "$MONGO_APP_PASSWORD" "$MONGO_DB"
 db.events.find({ type: /^security\./ }).sort({ ts: -1 }).limit(10)
 ```
 
-### 9.3 Outras ferramentas {#ferramentas}
+### 9.3 Outras ferramentas
 
 | Ferramenta | Uso |
 | --- | --- |
@@ -724,11 +593,9 @@ db.events.find({ type: /^security\./ }).sort({ ts: -1 }).limit(10)
 | DevTools, aba Rede, filtro WS | Cada frame da conexão `/ws`, sem precisar de captura |
 | Servidor falso (`npm run mock`) | Mesmo protocolo em memória, para o front-end e os testes E2E sem o backend |
 
-### 9.4 Roteiro de capturas no Wireshark {#wireshark}
+### 9.4 Roteiro de capturas no Wireshark
 
 Seguimos um roteiro de seis capturas. As locais usaram a interface de loopback do Npcap. As capturas brutas (.pcapng) não foram publicadas por conterem dados de ambiente; este documento traz apenas os prints, com os dados sensíveis cobertos.
-
-<div style="page-break-inside: avoid">
 
 | # | Captura | Figuras |
 | --- | --- | --- |
@@ -738,8 +605,6 @@ Seguimos um roteiro de seis capturas. As locais usaram a interface de loopback d
 | 4 | Ping/pong e fechamento | 10 |
 | 5 | Latência de uma jogada | 11 |
 | 6 | Queda de conexão | 12, 13 |
-
-</div>
 
 Filtros de exibição usados em cada captura:
 
@@ -754,25 +619,17 @@ Na captura 5, filtramos pelo conteúdo em vez de `tcp.stream eq N` porque a joga
 
 A captura de produção usou o filtro de captura `host <IP da VM>`, o IP público da VM, que descarta os outros pacotes antes de gravar. Assim, a captura contém só a conversa com o servidor: 131 pacotes e 43 KB, contra 5720 pacotes e 7,5 MB da captura local.
 
-### 9.5 Prints das capturas e correlação com o log {#prints-correlacao}
+### 9.5 Prints das capturas e correlação com o log
 
-<div style="page-break-inside: avoid">
-
-<img src="capturas/local-06-ping-pong-close.png" alt="Ping, pong e Close 1001" style="display:block; margin:0 auto; width:70%;">
+<p align="center"><img src="capturas/local-06-ping-pong-close.png" alt="Ping, pong e Close 1001" width="70%"></p>
 
 *Figura 10. Pings do servidor a cada 20 s, pongs mascarados do cliente e frame Close com o código 1001 (Going Away).*
 
-</div>
-
 É o keep-alive de protocolo do Uvicorn, que detecta conexões mortas. O Close 1001 vem do navegador, ao fechar a aba.
 
-<div style="page-break-inside: avoid">
-
-<img src="capturas/local-07-latencia.png" alt="MOVE e MATCH_STATE para medir a latência" style="display:block; margin:0 auto; width:75%;">
+<p align="center"><img src="capturas/local-07-latencia.png" alt="MOVE e MATCH_STATE para medir a latência" width="75%"></p>
 
 *Figura 11. Medição da latência: `MOVE` no frame 4707 (16:30:20,826948) e `MATCH_STATE` entregue ao adversário no frame 4717 (16:30:20,830004).*
-
-</div>
 
 **Latência (RNF04).** A diferença entre os dois frames é de cerca de 3 ms, de ponta a ponta entre os navegadores de A e de B: é o custo de processamento da aplicação, sem atraso de rede.
 
@@ -780,23 +637,15 @@ Como o ICMP está bloqueado na VM, medimos o tempo de ida e volta (RTT) pelo han
 
 Os 3 ms e os RTTs foram medidos; o total pela internet é uma estimativa, porque não capturamos as duas pontas remotas ao mesmo tempo. Não medimos entre duas máquinas da mesma rede local, o cenário de referência do requisito RNF04.
 
-<div style="page-break-inside: avoid">
-
-<img src="capturas/local-08-fin-tcp.png" alt="Encerramento TCP com FIN" style="display:block; margin:0 auto; width:75%;">
+<p align="center"><img src="capturas/local-08-fin-tcp.png" alt="Encerramento TCP com FIN" width="75%"></p>
 
 *Figura 12. Encerramento TCP depois do Close: os dois `FIN, ACK` às 16:29:39, sem `RST`.*
 
-</div>
-
 A ausência de `RST` indica que nenhum dos lados abortou a conexão.
 
-<div style="page-break-inside: avoid">
-
-<img src="capturas/local-09-log-desconexao.png" alt="Linha user.disconnected no log do backend" style="display:block; margin:0 auto; width:75%;">
+<p align="center"><img src="capturas/local-09-log-desconexao.png" alt="Linha user.disconnected no log do backend" width="75%"></p>
 
 *Figura 13. Evento `user.disconnected` no log do backend: 19:29:39 UTC, `close_code` 1001 e `duration_s` 63.6.*
-
-</div>
 
 As Figuras 1, 10, 12 e 13 mostram o mesmo encerramento visto pela rede e pelo servidor:
 
@@ -809,9 +658,9 @@ As Figuras 1, 10, 12 e 13 mostram o mesmo encerramento visto pela rede e pelo se
 
 A origem não coincide porque o backend roda em um contêiner Docker e recebe a conexão pelo gateway da rede interna (172.28.0.1), que faz NAT; por isso a correlação é feita pelo horário, pelo código e pela duração. Em produção, o log registra o IP real do cliente (seção 3.6).
 
-## 10. Implantação {#implantacao}
+## 10. Implantação
 
-### 10.1 Ambiente local {#ambiente-local}
+### 10.1 Ambiente local
 
 | Etapa | Comando | O que sobe |
 | --- | --- | --- |
@@ -821,7 +670,7 @@ A origem não coincide porque o backend roda em um contêiner Docker e recebe a 
 
 O profile `https` reproduz localmente o caminho de produção, sem domínio público.
 
-### 10.2 Produção {#producao}
+### 10.2 Produção
 
 A aplicação foi implantada em uma VM no Azure (hoje desativada), com a topologia do D2 (seção 3.6).
 
@@ -847,11 +696,9 @@ Os passos da implantação são:
 
 Para atualizar, basta `git pull` e `docker compose up -d --build`; o backup do MongoDB é feito com `mongodump`. O passo a passo completo está no repositório, em `infra/deploy/README.md`.
 
-## 11. Testes {#testes}
+## 11. Testes
 
-### 11.1 Organização {#organizacao-testes}
-
-<div style="page-break-inside: avoid">
+### 11.1 Organização
 
 | Nível | Testes | Comando | Resultado |
 | --- | --- | --- | --- |
@@ -859,13 +706,11 @@ Para atualizar, basta `git pull` e `docker compose up -d --build`; o backup do M
 | Integração (backend, MongoDB real) | 75 em 12 arquivos | `pytest tests/integration` | Todos passaram |
 | Ponta a ponta (Playwright, dois navegadores) | 22 em 2 arquivos | `npm run e2e` | Todos passaram |
 
-</div>
-
 Os testes de unidade cobrem as regras do jogo, o motor de partidas, a segurança (hash e JWT), o limite de mensagens e o event bus, sem rede nem banco. Os de integração sobem a aplicação com o cliente de testes do FastAPI e falam REST e WebSocket com o MongoDB do Docker Compose; cada teste remove os dados que criou. A suíte completa do backend (119 testes) roda em cerca de 48 s.
 
 Os testes ponta a ponta abrem dois contextos de navegador, um para cada jogador. Na execução registrada aqui, eles rodaram no modo padrão, contra o servidor falso (`npm run mock`) e o Vite. Eles validam o front-end e o contrato do protocolo; o comportamento do servidor real é validado pelos testes de integração. O front-end não tem testes unitários: a verificação dele é feita pelos testes ponta a ponta, pelo ESLint, pelo Prettier e pelo build com TypeScript estrito, todos sem erros.
 
-### 11.2 Plano de testes funcionais {#plano-testes}
+### 11.2 Plano de testes funcionais
 
 Os casos T01 a T24 foram definidos no plano de testes do projeto. A coluna "Verificação" indica onde cada um é conferido.
 
@@ -898,11 +743,9 @@ Os casos T01 a T24 foram definidos no plano de testes do projeto. A coluna "Veri
 
 Os testes de integração estão em `backend/tests/integration/`, os de unidade em `backend/tests/unit/` e os ponta a ponta em `frontend/e2e/`.
 
-### 11.3 Todos os resultados possíveis {#resultados-possiveis}
+### 11.3 Todos os resultados possíveis
 
 O objetivo foi cobrir todos os resultados possíveis de uma partida. Cada um tem pelo menos um teste automatizado:
-
-<div style="page-break-inside: avoid">
 
 | Resultado | Teste de integração | Teste ponta a ponta |
 | --- | --- | --- |
@@ -913,17 +756,15 @@ O objetivo foi cobrir todos os resultados possíveis de uma partida. Cada um tem
 | Tempo esgotado | `test_match_end.py` | Teste `TIMEOUT` (vitória de X) |
 | Desconexão sem volta | `test_match_end.py` | Não há |
 
-</div>
-
 A vitória de O por linha não tem teste próprio; a detecção de linha não depende do símbolo e é testada nas 8 linhas com X (`test_tictactoe.py`). A verificação de segurança com o Wireshark e a simulação de ataques estão nas seções 8.3 e 8.4.
 
-## 12. Decisões e qualidade {#decisoes-e-qualidade}
+## 12. Decisões e qualidade
 
-### 12.1 Qualidade do código {#qualidade-codigo}
+### 12.1 Qualidade do código
 
 O servidor segue camadas com dependência em um só sentido, e o módulo `domain/` não importa nada de rede nem de banco (seção 3.5). O código Python usa type hints e passa no ruff sem avisos; o TypeScript usa modo estrito, sem `any`, e passa no ESLint e no Prettier sem avisos. A configuração vem só de variáveis de ambiente. Cada mudança entra na branch de integração por merge request, e o `CONTRIBUTING.md` exige rodar antes o lint, a formatação, os testes do backend e o build do front-end.
 
-### 12.2 Principais decisões {#decisoes}
+### 12.2 Principais decisões
 
 - WebSocket nativo, e não `Socket.IO` ou MQTT: protocolo próprio e legível no Wireshark (seção 4.3).
 - Servidor autoritativo: consistência entre os clientes e proteção contra trapaça (seção 3.3).
@@ -933,7 +774,7 @@ O servidor segue camadas com dependência em um só sentido, e o módulo `domain
 - TLS terminado no Nginx, que também serve o front-end (seções 3.6 e 8.1).
 - Implantação em uma VM no Azure com Docker Compose e Let's Encrypt (seção 10.2).
 
-### 12.3 Limitações conhecidas {#limitacoes}
+### 12.3 Limitações conhecidas
 
 - **Trava global.** Partidas diferentes esperam umas pelas outras na mesma trava (seção 3.4).
 - **Estado em memória e um único worker.** Um reinício encerra as partidas em andamento, e não há escala horizontal (seção 3.3).
@@ -942,7 +783,7 @@ O servidor segue camadas com dependência em um só sentido, e o módulo `domain
 - **Testes ausentes.** T09 e T13 estão cobertos só em parte, e T20 (5 partidas simultâneas) não tem teste automatizado.
 - **Aviso no fim de algumas partidas.** Nos testes manuais, um aviso de erro apareceu no fim de algumas partidas. Pela análise do código, a causa provável é um segundo comando, normalmente um `MOVE` de clique duplo na casa que fecha a partida, chegar ao servidor depois do fim e ser recusado com `INVALID_STATE`, que o front-end mostra como aviso; nas jogadas comuns, o segundo clique recebe `STALE_STATE`, que é silencioso. O mesmo acontece com um `FORFEIT` ou um clique no instante em que a partida termina por tempo ou por desistência do outro jogador.
 
-### 12.4 Próximos passos {#proximos-passos}
+### 12.4 Próximos passos
 
 - Trocar a trava global por uma trava por partida.
 - Criar o painel de administração com os dados que já estão em `events`.
@@ -951,7 +792,7 @@ O servidor segue camadas com dependência em um só sentido, e o módulo `domain
 - Implementar o jogador bot.
 - Escrever os testes que faltam: `SELF_INVITE`, `USER_OFFLINE`, `MOVE` de terceiro e 5 partidas simultâneas.
 
-## 13. Referências {#referencias}
+## 13. Referências
 
 - RFC 6455, The WebSocket Protocol: https://www.rfc-editor.org/rfc/rfc6455
 - RFC 8446, The Transport Layer Security (TLS) Protocol Version 1.3: https://www.rfc-editor.org/rfc/rfc8446
