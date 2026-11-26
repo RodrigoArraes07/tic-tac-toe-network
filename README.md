@@ -1,269 +1,238 @@
 # Jogo da Velha Multiplayer
 
-Jogo da velha para 2 jogadores em rede, em arquitetura cliente-servidor com
-comunicação em tempo real por WebSocket. Projeto da disciplina Redes de
-Computadores 2.
+Jogo da velha para dois jogadores em tempo real pela rede, com servidor autoritativo em FastAPI, comunicação por WebSocket e cliente web em React.
 
-Aplicação em produção: https://dominio-de-producao.example
+<!-- TODO: gravar um GIF de uma partida entre duas abas e salvar em docs/demo.gif -->
+![Demonstração](docs/demo.gif)
 
-Documentação completa: [docs/documentacao.md](docs/documentacao.md), também
-entregue em PDF na plataforma da disciplina.
+## Sobre o projeto
 
-## Stack
+Este é um projeto de estudo que desenvolvemos em equipe para aplicar, na prática, conceitos de redes de computadores. Os tópicos foram:
 
-- Back-end: Python 3.14, FastAPI 0.143, Uvicorn 0.54, Pydantic 2.15, PyMongo
-  4.18 (API assíncrona), argon2-cffi 25.1 e PyJWT 2.15
-- Front-end: React 19, TypeScript 6.0, Vite 8 e React Router 7
-- Banco de dados: MongoDB 8.0
-- Proxy e TLS: Nginx (`stable-alpine`), certbot 5.8 em produção e mkcert no
-  ambiente local
-- Ambiente: Docker Compose
-- Testes e qualidade: pytest 9.1, Playwright 1.64, ruff 0.16, ESLint 10 e
-  Prettier 3.9
+- arquitetura cliente-servidor;
+- sockets e WebSocket sobre TCP;
+- definição de um protocolo de aplicação próprio;
+- TLS;
+- tratamento de falhas de conexão.
 
-## Estrutura
+O servidor é a única fonte da verdade: ele valida cada jogada, controla o tempo de turno e decide o fim da partida. Os clientes apenas exibem o estado que recebem.
 
-- `backend/`: servidor (API REST e WebSocket)
-- `frontend/`: cliente web
-- `infra/`: arquivos de infraestrutura
-- `docs/`: documentação do projeto
-  - `documentacao.md`: documentação completa
-  - `protocolo.md`: contrato entre cliente e servidor
-  - `diagramas/`: fontes Mermaid (`.mmd`) e imagens dos diagramas
-  - `capturas/`: capturas do Wireshark e prints
-  - `imagens/`: imagens usadas na documentação
+## Funcionalidades
 
-## Pré-requisitos
+- Cadastro e login, com senha armazenada como hash Argon2id e sessão por token JWT
+- Bloqueio temporário após tentativas de login malsucedidas repetidas
+- Lobby com a lista de jogadores online e o status de cada um (livre ou em partida), atualizada em tempo real
+- Convites entre jogadores: enviar, aceitar, recusar e cancelar, com expiração automática
+- Partida entre dois jogadores com validação de jogadas no servidor (turno, casa ocupada, casa inválida, estado desatualizado)
+- Detecção de vitória, com a linha vencedora destacada, e de empate
+- Tempo de turno de 30 s; ao esgotar, o adversário vence
+- Desistência durante a partida
+- Reconexão: se um jogador cai, tem 30 s para voltar e retomar a partida de onde parou
+- Sessão única por usuário: abrir a conta em outra aba encerra a conexão anterior
+- Ranking de jogadores (vitória = 3 pontos, empate = 1) e histórico das últimas partidas
+- Proteções no WebSocket: limite de mensagens por segundo, tamanho máximo de mensagem e verificação de origem
+- Logs estruturados em JSON e trilha de auditoria no MongoDB, sem senhas nem tokens
+- HTTPS/WSS com Nginx, usando certificado local (mkcert) no desenvolvimento e Let's Encrypt em produção
 
-- Git
-- Docker: Docker Desktop no Windows e no macOS; Docker Engine com o plugin
-  compose no Linux
-- Python 3.14, só para rodar testes e lint fora do Docker. No Linux, uma forma
-  simples de instalar é `uv python install 3.14` ou o pyenv
+## Tecnologias
+
+| Camada | Tecnologias |
+| --- | --- |
+| Back-end | Python 3.14, FastAPI, Uvicorn, Pydantic, PyMongo (API assíncrona), argon2-cffi, PyJWT |
+| Front-end | React 19, TypeScript, Vite, React Router |
+| Banco de dados | MongoDB 8.0 |
+| Rede e infraestrutura | WebSocket, Nginx (proxy reverso e terminação TLS), Docker Compose, certbot / Let's Encrypt, mkcert |
+| Testes e qualidade | pytest, pytest-asyncio, httpx, Playwright, ruff, ESLint, Prettier |
+
+## Arquitetura
+
+A arquitetura é cliente-servidor. O cliente web usa uma API REST para cadastro, login, ranking e histórico, e um WebSocket (`/ws`) para tudo que acontece em tempo real: presença, convites e partida. Em produção, o Nginx termina o TLS, serve o front-end e encaminha `/api` e `/ws` ao back-end.
+
+- **Fonte da verdade:** o estado das partidas fica no servidor. A cada jogada válida, ele envia o tabuleiro completo aos dois jogadores. Um número de sequência (`seq`) permite recusar jogadas feitas sobre um estado desatualizado.
+- **Concorrência:** o servidor roda em um único processo assíncrono (asyncio). O gateway WebSocket publica os comandos em um barramento de eventos interno. O motor do jogo serializa as alterações de estado com um `asyncio.Lock`. Os timers de turno, de convite e de reconexão são tarefas assíncronas.
+- **Desconexões:** o ping/pong do WebSocket detecta conexões mortas. Se um jogador cai durante a partida, o adversário é avisado e abre-se uma janela de reconexão. Se o prazo acabar, a partida termina por desconexão. O cliente tenta reconectar com espera exponencial.
+- **Persistência:** o MongoDB guarda usuários, estatísticas, partidas encerradas e eventos de auditoria.
+
+```mermaid
+sequenceDiagram
+    participant A as Cliente A
+    participant S as Servidor
+    participant B as Cliente B
+
+    Note over A,B: Conexão e autenticação (cada cliente)
+    A->>S: WebSocket /ws + AUTH {token}
+    S-->>A: AUTH_OK + PRESENCE_SNAPSHOT
+    B->>S: WebSocket /ws + AUTH {token}
+    S-->>B: AUTH_OK + PRESENCE_SNAPSHOT
+    S-->>A: PRESENCE_UPDATE (B online)
+
+    Note over A,B: Convite
+    A->>S: INVITE_SEND {to_username}
+    S-->>A: INVITE_SENT
+    S-->>B: INVITE_RECEIVED
+    B->>S: INVITE_RESPOND {accept: true}
+    S-->>A: MATCH_STARTED (you_are: X)
+    S-->>B: MATCH_STARTED (you_are: O)
+
+    Note over A,B: Jogadas
+    A->>S: MOVE {cell, seq}
+    S->>S: valida turno, casa e seq
+    S-->>A: MATCH_STATE (tabuleiro completo)
+    S-->>B: MATCH_STATE (tabuleiro completo)
+    B->>S: MOVE fora do turno
+    S-->>B: ERROR NOT_YOUR_TURN
+
+    Note over A,B: Fim de partida
+    A->>S: MOVE (jogada vencedora)
+    S-->>A: MATCH_STATE + MATCH_ENDED (WIN)
+    S-->>B: MATCH_STATE + MATCH_ENDED (LOSS)
+```
+
+## Protocolo
+
+Toda mensagem do WebSocket é um objeto JSON com o envelope `{type, id, ref, ts, payload}`. O `ref` liga uma resposta ou um erro à mensagem que os originou. A especificação completa, com códigos de erro e de fechamento, está em [docs/protocolo.md](docs/protocolo.md).
+
+| Direção | Mensagem | Payload | Descrição |
+| --- | --- | --- | --- |
+| C → S | `AUTH` | `{token}` | Primeira mensagem obrigatória (até 5 s) |
+| C → S | `INVITE_SEND` | `{to_username}` | Convida um jogador |
+| C → S | `INVITE_RESPOND` | `{match_id, accept}` | Aceita ou recusa o convite |
+| C → S | `INVITE_CANCEL` | `{match_id}` | Cancela um convite pendente |
+| C → S | `MOVE` | `{match_id, cell, seq}` | Jogada na casa 0–8 |
+| C → S | `FORFEIT` | `{match_id}` | Desiste da partida |
+| C → S | `MATCH_SYNC` | `{match_id}` | Pede o estado completo (após reconexão) |
+| S → C | `AUTH_OK` | `{user, active_match_id}` | Autenticação aceita |
+| S → C | `PRESENCE_SNAPSHOT` / `PRESENCE_UPDATE` | `{users}` / `{username, status}` | Jogadores online e seus status |
+| S → C | `INVITE_SENT` / `INVITE_RECEIVED` | `{match_id, …, expires_in}` | Convite enviado / recebido |
+| S → C | `INVITE_RESULT` | `{match_id, status}` | Convite recusado, expirado ou cancelado |
+| S → C | `MATCH_STARTED` | `{match_id, you_are, opponent, board, turn, seq}` | Início da partida |
+| S → C | `MATCH_STATE` | `{match_id, board, turn, seq, last_move}` | Estado após cada jogada |
+| S → C | `MATCH_ENDED` | `{match_id, result, reason, winning_line, board}` | Fim: vitória, derrota ou empate |
+| S → C | `OPPONENT_DISCONNECTED` / `OPPONENT_RECONNECTED` | `{match_id, grace_seconds}` / `{match_id}` | Queda e retorno do adversário |
+| S → C | `ERROR` | `{code, message}` | Comando recusado (ex.: `NOT_YOUR_TURN`, `CELL_OCCUPIED`, `STALE_STATE`) |
+
+## Como executar
+
+### Pré-requisitos
+
+- Docker com o plugin Compose
 - Node.js LTS
+- Python 3.14, apenas para rodar os testes do back-end fora do Docker
 
-## Como rodar
+### Desenvolvimento
 
-1. Crie o arquivo `.env` a partir do exemplo, na raiz do repositório.
+1. Crie o `.env` a partir do exemplo. Os valores do exemplo servem apenas para desenvolvimento.
 
-   Windows (cmd):
-
-   ```
-   copy .env.example .env
-   ```
-
-   Linux/macOS:
-
-   ```
+   ```bash
    cp .env.example .env
    ```
 
-   Os valores do exemplo funcionam em desenvolvimento. Fora dele, troque as
-   senhas e o `JWT_SECRET`.
+2. Suba o MongoDB e o back-end:
 
-2. Suba o MongoDB e o back-end.
-
-   ```
+   ```bash
    docker compose up -d --build
    ```
 
-3. Em outro terminal, rode o front-end.
+3. Em outro terminal, rode o front-end:
 
-   ```
+   ```bash
    cd frontend
    npm install
    npm run dev
    ```
 
-Endereços:
+4. Acesse http://localhost:5173 em duas abas ou dois navegadores, cadastre dois usuários e convide um para jogar. O Vite encaminha `/api` e `/ws` para o back-end em `http://localhost:8000`. O health check fica em http://localhost:8000/api/health.
 
-- Front-end: http://localhost:5173
-- Health check do back-end: http://localhost:8000/api/health
+### HTTPS local (opcional)
 
-## Como testar
+Com o [mkcert](https://github.com/FiloSottile/mkcert) instalado:
 
-### Back-end
-
-Os testes de integração usam o MongoDB do Docker, então deixe o
-`docker compose` no ar antes de rodar o `pytest`.
-
-Windows (cmd):
-
-```
-cd backend
-python -m venv .venv
-.venv\Scripts\activate
-pip install -r requirements-dev.txt
-ruff check .
-ruff format --check .
-pytest
+```bash
+mkcert -install
+mkdir -p infra/certs
+mkcert -cert-file infra/certs/localhost.pem -key-file infra/certs/localhost-key.pem localhost 127.0.0.1 ::1
+docker compose --profile https up -d --build
 ```
 
-Linux/macOS:
+Acesse https://localhost.
 
-```
+### Variáveis de ambiente
+
+| Variável | Descrição |
+| --- | --- |
+| `MONGO_ROOT_USER`, `MONGO_ROOT_PASSWORD` | Usuário administrador do MongoDB |
+| `MONGO_APP_USER`, `MONGO_APP_PASSWORD`, `MONGO_DB`, `MONGO_URI` | Usuário da aplicação e conexão com o banco |
+| `JWT_SECRET` | Segredo de assinatura do JWT (mínimo de 32 caracteres; gere com `openssl rand -hex 32`) |
+| `JWT_EXPIRES_MINUTES` | Validade do token |
+| `ALLOWED_ORIGINS` | Origens aceitas no handshake do WebSocket, separadas por vírgula |
+| `INVITE_TIMEOUT_S`, `RECONNECT_GRACE_S` | Expiração de convites e janela de reconexão (padrão: 30 s) |
+| `WS_RATE_PER_SECOND`, `WS_RATE_BURST`, `WS_MAX_MESSAGE_BYTES` | Limites do WebSocket |
+| `LOG_LEVEL`, `SERVER_PORT`, `AUDIT_ENABLED` | Log e auditoria |
+| `DOMAIN`, `LETSENCRYPT_EMAIL` | Apenas em produção |
+
+Para implantação em produção (Nginx + Let's Encrypt), veja [infra/deploy/README.md](infra/deploy/README.md).
+
+## Como rodar os testes
+
+### Back-end (unidade e integração)
+
+Os testes de integração usam o MongoDB do Docker, então mantenha o `docker compose` no ar.
+
+```bash
 cd backend
 python3.14 -m venv .venv
-source .venv/bin/activate
+source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements-dev.txt
-ruff check .
-ruff format --check .
-pytest
+ruff check . && ruff format --check .
+pytest                           # ou: pytest tests/unit  |  pytest tests/integration
 ```
 
-O ambiente virtual só precisa ser criado e ter as dependências instaladas uma
-vez. Nas próximas, basta ativá-lo.
+### Front-end (lint e build)
 
-Para rodar cada nível separado: `pytest tests/unit` (não usa o banco) e
-`pytest tests/integration` (usa o MongoDB do `docker compose`).
-
-### Front-end
-
-```
+```bash
 cd frontend
 npm run lint
 npm run format:check
 npm run build
 ```
 
-### Ponta a ponta (E2E)
+### Ponta a ponta (Playwright)
 
-```
+Por padrão, o Playwright sobe um servidor falso na porta 8000 e o Vite na porta 5173. Pare o back-end do Docker antes (`docker compose stop backend`).
+
+```bash
 cd frontend
-npx playwright install chromium
+npx playwright install chromium   # apenas na primeira vez
 npm run e2e
 ```
 
-O `npx playwright install chromium` só é necessário na primeira vez. O
-Playwright sobe o servidor falso (`npm run mock`, porta 8000) e o Vite (porta
-5173). Por isso, o back-end do Docker precisa estar parado
-(`docker compose stop backend`); senão a porta 8000 é reaproveitada.
-
-## HTTPS local
-
-O Nginx termina o TLS na porta 443, serve o build do front-end e encaminha
-`/api` e `/ws` ao back-end. Ele só sobe com o profile `https`; o desenvolvimento
-do dia a dia continua com `npm run dev`.
-
-1. Instale o mkcert.
-
-   Windows (cmd):
-
-   ```
-   winget install FiloSottile.mkcert
-   ```
-
-   Linux:
-
-   ```
-   sudo apt install mkcert libnss3-tools
-   ```
-
-2. Instale a autoridade certificadora local.
-
-   ```
-   mkcert -install
-   ```
-
-3. Gere o certificado em `infra/certs/`, na raiz do repositório.
-
-   Windows (cmd):
-
-   ```
-   mkdir infra\certs
-   mkcert -cert-file infra\certs\localhost.pem -key-file infra\certs\localhost-key.pem localhost 127.0.0.1 ::1
-   ```
-
-   Linux/macOS:
-
-   ```
-   mkdir -p infra/certs
-   mkcert -cert-file infra/certs/localhost.pem -key-file infra/certs/localhost-key.pem localhost 127.0.0.1 ::1
-   ```
-
-   Para testar a partir de outra máquina da rede, acrescente o IP do servidor
-   ao fim do comando.
-
-4. Suba tudo com o Nginx.
-
-   ```
-   docker compose --profile https up -d --build
-   ```
-
-Acesse https://localhost. Para parar, incluindo o Nginx:
-
-```
-docker compose --profile https down
-```
-
-## Capturas do Wireshark
-
-As capturas ficam em `docs/capturas/`: `capturas-locais-sem-tls.pcapng`,
-`captura-tls-producao.pcapng` e os prints usados na documentação. Para abrir um
-`.pcapng`, use o Wireshark (Arquivo > Abrir). Os filtros de exibição de cada
-captura estão na seção 9.4 da documentação.
-
-## Comandos do Docker
-
-| Comando | Quando usar |
-| --- | --- |
-| `docker compose up -d --build` | Subir o ambiente, ou reconstruir depois de mudar o `Dockerfile` ou os `requirements`. |
-| `docker compose logs -f backend` | Acompanhar os logs do servidor em tempo real. |
-| `docker compose down` | Parar tudo mantendo os dados do banco. |
-| `docker compose down -v` | Parar tudo e apagar o volume do banco, para recomeçar do zero. |
-
-Mudanças em `backend/app/` não exigem reconstruir: o servidor recarrega sozinho.
-
-## Problemas comuns
-
-### Porta 27017 ocupada
-
-O `docker compose up` falha ao publicar a porta do `mongo` quando já existe um
-MongoDB instalado e rodando no sistema. Pare o serviço e desative o início
-automático.
-
-Windows (cmd como administrador):
-
-```
-net stop MongoDB
-sc config MongoDB start= demand
-```
-
-Linux:
-
-```
-sudo systemctl stop mongod
-sudo systemctl disable mongod
-```
-
-### Linux pedindo sudo para o docker
-
-Adicione seu usuário ao grupo `docker` e entre de novo na sessão.
-
-```
-sudo usermod -aG docker $USER
-```
-
-### Mudou usuário ou senha do banco no .env
-
-O usuário da aplicação só é criado quando o volume do banco está vazio. Depois
-de alterar o `.env`, apague o volume e suba de novo.
-
-```
-docker compose down -v
-docker compose up -d --build
-```
+Para rodar contra o sistema real com HTTPS: `E2E_BASE_URL=https://localhost E2E_NO_SERVER=1 npm run e2e`.
 
 ## Documentação
 
-- [Documentação completa](docs/documentacao.md), também entregue em PDF na
-  plataforma da disciplina
-- [Protocolo de comunicação](docs/protocolo.md): contrato entre cliente e
-  servidor
-- [Deploy em produção](infra/deploy/README.md): guia de implantação
-- [Como contribuir](CONTRIBUTING.md)
+- [Documentação técnica](docs/documentacao.md): requisitos, arquitetura, protocolo, segurança, análise de tráfego com Wireshark (com e sem TLS), implantação e testes
+- [Protocolo de comunicação](docs/protocolo.md): contrato completo entre cliente e servidor
+- [Deploy em produção](infra/deploy/README.md): Nginx, Let's Encrypt, atualização e backup
 
-## Como contribuir
+## Minha contribuição
 
-As regras de branches, commits e merge requests estão em
-[CONTRIBUTING.md](CONTRIBUTING.md).
+Atuei principalmente em dados, segurança e infraestrutura, além de trabalhar na lógica de partida do servidor:
+
+- **Estrutura do projeto:** criei o repositório, os esqueletos do back-end (FastAPI) e do front-end (React + Vite), o ambiente Docker Compose com MongoDB e a primeira versão do protocolo de comunicação.
+- **Autenticação:** implementei o cadastro, o login e a rota `/api/me`, com hash Argon2id, tokens JWT e bloqueio após tentativas repetidas de login.
+- **Ranking:** implementei o ranking de jogadores e a atualização das estatísticas ao fim de cada partida.
+- **Ciclo de vida da partida:**
+  - centralizei o encerramento das partidas (vitória, empate, desistência, tempo esgotado);
+  - implementei a validação por número de sequência;
+  - completei o fluxo de convites e a sessão única por usuário, com retomada da partida.
+- **Reconexão:** implementei a janela de reconexão durante a partida, com aviso ao adversário e suspensão do tempo de turno.
+- **Segurança do WebSocket:** implementei o limite de taxa (token bucket), o limite de tamanho de mensagem e a validação de origem.
+- **Observabilidade:** implementei os logs estruturados e a gravação dos eventos da aplicação no MongoDB, com remoção de dados sensíveis.
+- **Infraestrutura:** configurei o Nginx com HTTPS/WSS e o deploy em produção com Let's Encrypt e renovação automática do certificado.
+- **Integração e documentação:** alinhei o contrato de mensagens entre front-end e back-end, reforcei os testes do back-end e escrevi a documentação técnica. A documentação inclui diagramas e análise do tráfego com Wireshark, comparando a comunicação com e sem TLS.
+
+## Equipe
+
+- Rodrigo Arraes
+- William Mendonça
+- Luiz Moura <!-- TODO: confirmar o nome a exibir e se "Theardripper" (autor dos commits do front-end) é a mesma pessoa ou um quarto integrante -->

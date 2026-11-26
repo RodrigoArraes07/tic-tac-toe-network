@@ -52,16 +52,16 @@ Saia e entre de novo na sessão para usar o `docker` sem `sudo`.
 
 ## 3. Código
 
-No GitLab, crie um deploy token só de leitura (Settings > Repository > Deploy
-tokens, escopo `read_repository`) e clone com ele:
+Clone o repositório na VM com uma credencial somente leitura (um deploy key SSH
+ou um token de acesso com permissão apenas de leitura):
 
 ```
-git clone https://<usuario-do-token>:<token>@gitlab.com/<grupo>/jogo-da-velha-redes2.git
-cd jogo-da-velha-redes2
+git clone <url-do-repositorio> tic-tac-toe-network
+cd tic-tac-toe-network
 ```
 
-O token fica gravado em `.git/config` da VM. Por isso use um token só de
-leitura e revogue-o se a VM for descartada.
+Se usar um token na URL, ele fica gravado em `.git/config` da VM. Por isso use
+uma credencial só de leitura e revogue-a se a VM for descartada.
 
 ## 4. `.env` de produção
 
@@ -102,7 +102,7 @@ Se der certo, apague o certificado de teste e emita o real:
 
 ```
 docker compose down
-docker volume rm jogo-da-velha-redes2_letsencrypt
+docker volume rm tic-tac-toe-network_letsencrypt
 ./infra/deploy/primeiro-certificado.sh
 ```
 
@@ -141,7 +141,7 @@ Alternativa: cópia do volume inteiro, com o MongoDB parado.
 
 ```
 docker compose stop mongo
-docker run --rm -v jogo-da-velha-redes2_mongo-data:/data -v "$PWD":/backup alpine tar czf /backup/mongo-data-$(date +%F).tgz -C /data .
+docker run --rm -v tic-tac-toe-network_mongo-data:/data -v "$PWD":/backup alpine tar czf /backup/mongo-data-$(date +%F).tgz -C /data .
 docker compose start mongo
 ```
 
